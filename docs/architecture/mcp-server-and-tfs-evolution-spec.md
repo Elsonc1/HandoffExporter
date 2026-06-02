@@ -1,9 +1,9 @@
 # HandoffExporter — Spec de Evolução: Split de JSON, Escopo MacGyver, Extensão TFS e MCP Server Local
 
-> **Status:** rascunho de especificação (Fase 0). **Nada de código ainda** — este
-> documento é a fonte de verdade do roadmap. Cada fase vira um ciclo
-> architect → dev → qa.
-> **Autor inicial:** squad `@handoffexporter-*` · **Data:** 2026-06-02
+> **Status:** Fase 0 aprovada; **Fase 1 (split) implementada e validada offline**
+> (ver `docs/dev/fase-1-split.md`). Este documento é a fonte de verdade do roadmap.
+> Cada fase vira um ciclo architect → dev → qa.
+> **Autor inicial:** squad `@handoffexporter-*` · **Data:** 2026-06-02 · **TFS:** Azure DevOps Server 2022.2
 
 ---
 
@@ -145,7 +145,7 @@ export/
   "areaPath": "Central de Soluções\\MacGyver",
   "description": "<texto sanitizado>",
   "childUsIds": [193405, 193406],
-  "children": [ { "id": 193405, "path": "../us/US-193405.json" } ],
+  "children": [ { "id": 193405, "path": "us/US-193405.json" } ],
   "attachments": [ { "fileName": "...", "url": "..." } ]
 }
 ```
@@ -161,7 +161,7 @@ export/
   "parentPbiId": 193404,
   "description": "<de ndd.DefinicoesDeNegocio, sanitizado>",
   "acceptanceCriteria": "<de ndd.DefinicoesTecnicas, sanitizado>",
-  "assets": [ { "fileName": "193405-img-01.png", "path": "../assets/193405-img-01.png", "contentType": "image/png" } ]
+  "assets": [ { "fileName": "193405-asset-1.png", "path": "assets/193405-asset-1.png", "contentType": "image/png" } ]
 }
 ```
 
@@ -214,12 +214,13 @@ flag `--includeBuilds`).
 | Log (conteúdo, texto) | `GET _apis/build/builds/{buildId}/logs/{logId}?api-version=6.0` |
 | Release defs (clássico) | `GET _apis/release/definitions` (host **vsrm**; api-version pode diferir) |
 
-### 6.1 ⚠️ Risco/Questão aberta — versão do TFS on-prem
+### 6.1 ✅ Versão do TFS — confirmada: Azure DevOps Server 2022.2
 
-A API `_apis/pipelines` (pipelines YAML) só existe em Azure DevOps mais novo. TFS Server
-2018/2019 tende a ter só **build/release clássico**. **Antes de planejar esta fase, confirmar a
-versão do servidor** (`GET https://tfs.ndd.tech/_apis/` ou a página "About"). O plano de
-endpoints muda conforme a versão.
+Confirmado **Azure DevOps Server 2022.2** (build `AzureDevopsServer_20260204.3`). Suporta
+a REST API 6.0/7.1, a **Build API** (`_apis/build/*`, para timeline/logs) **e** a
+**Pipelines API** (`_apis/pipelines`, YAML). O PAT atual **tem scope de Build read**.
+→ Fase 3 desbloqueada: usar a Build API (api 6.0, consistente com o código atual) para
+builds/timeline/logs; a Pipelines API fica disponível se quisermos as definições YAML.
 
 ### 6.2 Saída proposta (alinha com o split)
 
@@ -303,19 +304,25 @@ Papéis do squad nesta evolução:
 
 | Fase | Entregável | Definition of Done |
 |------|-----------|--------------------|
-| 0 | Esta spec | Aprovada pelo usuário |
-| 1 | Split (`HandoffSplitter` + `--split`) | `export/macgyver/` gerado; index + cross-refs corretos; sem segredos; determinístico; QA APROVADO |
+| 0 | Esta spec | ✅ Aprovada |
+| 1 | Split (`HandoffSplitter` + `--split`) | ✅ **Implementada e validada offline** (`docs/dev/fase-1-split.md`); pendente QA formal (`/handoffexporter:review`) |
 | 2 | Escopo MacGyver | `--team macgyver` (ou doc do uso de area); sub-areas opcionais |
 | 3 | Builds/timeline/logs | versão do TFS confirmada; `BuildQueryService`; `builds/` + `logs/` em texto; QA APROVADO |
 | 4 | MCP server local | tools mínimas (`list_pbis`/`get_pbi`/`get_us`/`search`); aponta p/ o split; doc de config |
 
 ---
 
-## 11. Questões abertas (precisam de confirmação do usuário)
+## 11. Questões — respostas do usuário (2026-06-02)
 
-1. **Versão do TFS on-prem?** Define se a Fase 3 usa build/release clássico ou `_apis/pipelines`.
-2. **Onde fica o diretório do split?** Dentro do repo (`export/`) ou um caminho externo/compartilhado?
-3. **`RawHtml`:** descartar de vez nos arquivos do agent, ou manter em `raw/`?
-4. **MCP em .NET ou Node?** (Fase 4 — só quando chegarmos lá.)
-5. **PAT scopes:** o PAT atual tem leitura de **Build** (necessário p/ Fase 3)? Se não, gerar um novo.
-6. **Periodicidade do export:** sob demanda ou agendado (Task Scheduler / cron)?
+| # | Questão | Resposta / Decisão |
+|---|---------|--------------------|
+| 1 | Versão do TFS on-prem | ✅ **Azure DevOps Server 2022.2** — Build API + Pipelines API disponíveis (ver 6.1) |
+| 2 | Onde fica o split | **Dentro do repo** (`export/`). Repo ainda não está no GitHub; `.gitignore` agora ignora `export/`, `tmp/`, os JSON grandes e `**/config.xml` (PAT) |
+| 3 | RawHtml | **Manter em `raw/<id>.html`** (implementado na Fase 1) |
+| 4 | PAT tem Build read | ✅ **Sim** — Fase 3 desbloqueada |
+| 5 | MCP em .NET ou Node | _(decidir na Fase 4)_ |
+| 6 | Periodicidade do export | _(em aberto — sob demanda por enquanto)_ |
+
+> ⚠️ **Segurança:** o repo será subido ao GitHub e o `config/config.xml` contém o PAT.
+> O `.gitignore` foi atualizado para ignorá-lo (`**/config.xml`). Antes do push, confirmar
+> que nenhum `config.xml` com PAT entrou no índice do git.

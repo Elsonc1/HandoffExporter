@@ -5,7 +5,11 @@
 
 ## Active Tasks
 
-_(nenhuma ainda)_
+### Fase 1 — Split do JSON ✅ ENTREGUE (pendente QA)
+- Novo `Services/HandoffSplitter.cs` + flags `--split <dir>` / `--splitFrom <file>` em `Program.cs`.
+- Validado offline (fixture 1 PBI + 2 US): build 0 erros, árvore correta, sem vazar data-URI, PNG extraído, determinístico.
+- Doc: `docs/dev/fase-1-split.md`. Handoff `ENTREGA_PRONTA` em `.claude/handoffs.json`.
+- Follow-up: `acceptanceCriteria`/`state` saem null — exportador não captura `ndd.DefinicoesTecnicas`/`System.State` (Fase 2).
 
 ## Build / Run
 

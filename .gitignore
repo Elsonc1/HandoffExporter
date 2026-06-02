@@ -361,3 +361,16 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# ── HandoffExporter ───────────────────────────────────────────────
+# Config com PAT (segredo) — NUNCA versionar. Commitar config.example.xml no lugar.
+**/config.xml
+
+# JSON grande gerado pelo export — não versionar
+output.json
+test-content.json
+logs.json
+
+# Saída do split e scratch
+export/
+tmp/

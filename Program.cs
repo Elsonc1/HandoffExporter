@@ -94,6 +94,7 @@ namespace HandoffExporter
             string collection = null, project = null, areaPath = null, output = null, mode = "pbi";
             int? pbiId = null;
             bool includeIssues = false;
+            string splitDir = null, splitFrom = null;
 
             if (args.Length == 0)
             {
@@ -116,12 +117,38 @@ namespace HandoffExporter
                     else if (args[i] == "--includeIssues" && i + 1 < args.Length) includeIssues = bool.Parse(args[++i]);
                     else if (args[i] == "--mode" && i + 1 < args.Length) mode = args[++i];
                     else if (args[i] == "--output" && i + 1 < args.Length) output = args[++i];
+                    else if (args[i] == "--split" && i + 1 < args.Length) splitDir = args[++i];
+                    else if (args[i] == "--splitFrom" && i + 1 < args.Length) splitFrom = args[++i];
+                }
+            }
+
+            // Offline split: lê um HandoffJson existente e o quebra em sub-arquivos, sem chamar o TFS.
+            if (!string.IsNullOrEmpty(splitFrom))
+            {
+                try
+                {
+                    var existing = JsonConvert.DeserializeObject<HandoffJson>(File.ReadAllText(splitFrom));
+                    if (existing == null)
+                    {
+                        Console.Error.WriteLine($"Split source vazio/inválido: {splitFrom}");
+                        return 1;
+                    }
+                    var dir = !string.IsNullOrEmpty(splitDir) ? splitDir : "export";
+                    HandoffSplitter.Split(existing, dir);
+                    Console.WriteLine($"Split written to {dir}");
+                    return 0;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Split error: {ex.Message}");
+                    return 1;
                 }
             }
 
             if (string.IsNullOrEmpty(collection) || string.IsNullOrEmpty(project) || string.IsNullOrEmpty(areaPath) || string.IsNullOrEmpty(output))
             {
-                Console.WriteLine("Usage: HandoffExporter --collection <collection> --project <project> --areaPath <areaPath> [--pbiId <id>] [--includeIssues <true/false>] [--mode pbi|all-artifacts] --output <outputFile>");
+                Console.WriteLine("Usage: HandoffExporter --collection <c> --project <p> --areaPath <a> [--pbiId <id>] [--includeIssues <true/false>] [--mode pbi|all-artifacts] --output <file> [--split <dir>]");
+                Console.WriteLine("   or: HandoffExporter --splitFrom <file> [--split <dir>]   (offline, sem TFS)");
                 return 1;
             }
 
@@ -205,6 +232,12 @@ namespace HandoffExporter
                     Directory.CreateDirectory(outputDirectory);
                 File.WriteAllText(output, json);
                 Console.WriteLine($"Exported to {output}");
+
+                if (!string.IsNullOrEmpty(splitDir))
+                {
+                    HandoffSplitter.Split(handoffJson, splitDir);
+                    Console.WriteLine($"Split written to {splitDir}");
+                }
                 return 0;
             }
             catch (Exception ex)
