@@ -61,6 +61,9 @@ namespace HandoffExporter.Config
         [XmlElement("OutputFile")]
         public string OutputFile { get; set; }
 
+        [XmlElement("ReposProject")]
+        public string ReposProject { get; set; }
+
         [XmlIgnore]
         public List<string> AreaNames => ControlTargetDate?.Areas?.Select(a => a.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
 

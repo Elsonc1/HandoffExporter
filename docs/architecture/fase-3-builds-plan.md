@@ -4,6 +4,15 @@
 > Plano do `@handoffexporter-architect` para o `@handoffexporter-dev` executar.
 > Handoff `PLAN_READY` (taskId `fase-3-builds`) no `.claude/handoffs.json`.
 
+## 0. O que é "build definition"? (≠ repositório)
+- **Repositório** = o código-fonte (git). Vive no Project `Integrações` → tratado na **Fase 5**.
+- **Build definition** = a **definição de um pipeline de CI/CD** (os passos que compilam/testam/publicam um repo). Não é o repo; é a "receita".
+- **Build** = uma **execução** de uma definition (status, resultado, timeline e **logs**). Logs/timeline são o que esta fase exporta.
+- **Onde ficam:** as build definitions ficam num **Project** — tipicamente o mesmo do código, i.e. **`Integrações`** (mesma collection `NDD-DECollection`). Então a Fase 3 reusa o plumbing multi-project da Fase 5, só trocando `_apis/git` por `_apis/build`.
+
+> ⚠️ **Pré-requisito a confirmar:** o time MacGyver **usa Azure Pipelines (CI/CD)** na `Integrações`?
+> Se só versiona código e não roda pipelines, **não há builds para exportar** — a Fase 3 fica sem objeto e o foco vira repos/commits/PRs (Fase 5).
+
 ## Objetivo
 Adicionar ao snapshot offline os **builds** do(s) pipeline(s) do time MacGyver: status,
 resultado, timeline (etapas que falharam) e **logs em texto puro** — para o agent varrer

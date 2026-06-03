@@ -309,7 +309,7 @@ Papéis do squad nesta evolução:
 | 2 | Escopo MacGyver | `--team macgyver` (ou doc do uso de area); sub-areas opcionais |
 | 3 | Builds/timeline/logs | versão do TFS confirmada; `BuildQueryService`; `builds/` + `logs/` em texto; QA APROVADO |
 | 4 | MCP server local | tools mínimas (`list_pbis`/`get_pbi`/`get_us`/`search`); aponta p/ o split; doc de config |
-| 5 | Segmentação por repositório (multi-collection: Integrações) | `GitQueryService`; `export/macgyver/repos/`; join work item ↔ repo no index — **análise na §12** |
+| 5 | Segmentação por repositório (multi-project: Integrações) | ✅ **START**: lista repos+branches (`GitQueryService`/`RepoWriter`, `--includeRepos`). Falta o join work item↔repo (§12.6) |
 
 ---
 
@@ -330,24 +330,25 @@ Papéis do squad nesta evolução:
 
 ---
 
-## 12. Análise — Segmentação por repositório (multi-collection)
+## 12. Segmentação por repositório (multi-project, single collection)
 
-> Resposta ao pedido: "analisar para o projeto ser segmentado por repositório. Hoje o
-> time MacGyver usa duas Collection: Central de Soluções (quadro Kanban) e Integrações (repositórios)."
-> **Isto é análise/desenho (Fase 5), não implementação.**
+> ✅ **CORRIGIDO (multi-project, NÃO multi-collection):** o MacGyver usa **uma única
+> Collection `NDD-DECollection`** com dois **Projects**: `Central de Soluções` (Kanban/work items)
+> e `Integrações` (repos — `https://tfs.ndd.tech/NDD-DECollection/Integrações`).
+> ✅ **Fase 5 START implementada:** lista repos + branches (`GitQueryService` + `RepoWriter`),
+> flag `--includeRepos`, saída `repos/`. Ver `docs/dev/fase-2b-5-repos.md`.
 
 ### 12.1 O cenário
-O MacGyver vive hoje em **dois endpoints distintos** do TFS:
+| Domínio | Endpoint (host `tfs.ndd.tech`) | Status |
+|---------|--------------------------------|--------|
+| Work items (Kanban) | `NDD-DECollection/Central de Soluções` | ✅ exporta PBIs/US |
+| Repositórios (código) | `NDD-DECollection/Integrações` (Project, mesma collection) | ✅ Fase 5 START: lista repos + branches |
 
-| Domínio | Endpoint | O que o exporter faz |
-|---------|----------|----------------------|
-| Work items (Kanban) | Collection `NDD-DECollection` / Project `Central de Soluções` | ✅ exporta PBIs/US (atual) |
-| Repositórios (código) | **Integrações** (Collection? Project?) | ❌ ainda não toca |
-
-### 12.2 O desafio arquitetural
-O exporter é **single-endpoint** hoje: `TFSAplicationProcess._baseUrl = https://tfs.ndd.tech/{org}/{project}`.
-Para incluir os repositórios da `Integrações`, precisa virar **multi-source**: um segundo
-`_baseUrl` (collection/project diferente), reusando o mesmo PAT/Basic.
+### 12.2 O desafio arquitetural (resolvido na Fase 5 START)
+Mesma collection, **project diferente** — basta um segundo base URL
+`https://tfs.ndd.tech/NDD-DECollection/{Uri.EscapeDataString("Integrações")}` = `.../Integra%C3%A7%C3%B5es`,
+reusando o **mesmo HttpClient/PAT**. Implementado em `GitQueryService` (recebe o `HttpClient`
+autenticado do `TFSAplicationProcess`).
 
 ### 12.3 Git REST API (ADO Server 2022.2) — endpoints
 Base: `https://tfs.ndd.tech/{collection}/{project}/_apis/git/...`, api 6.0, Basic PAT.
@@ -362,16 +363,13 @@ Base: `https://tfs.ndd.tech/{collection}/{project}/_apis/git/...`, api 6.0, Basi
 | Work items de um PR | `GET _apis/git/repositories/{repoId}/pullRequests/{prId}/workitems` |
 | Árvore/arquivos | `GET _apis/git/repositories/{repoId}/items?scopePath=/&recursionLevel=Full` |
 
-### 12.4 Config multi-source (proposta)
-`ConfigVO` ganha um bloco para a fonte de repositórios (PAT pode ser o mesmo):
+### 12.4 Config (implementado)
+`ConfigVO` ganhou `ReposProject` (mesma collection do work-items source):
 
 ```xml
-<ReposSource>
-  <Collection>NDD-DECollection</Collection>   <!-- ou a collection da Integrações -->
-  <Project>Integrações</Project>
-  <Repositories>ALL</Repositories>            <!-- ou lista por nome -->
-</ReposSource>
+<ReposProject>Integrações</ReposProject>
 ```
+CLI: `--includeRepos true [--reposProject Integrações]`. Default do project = `Integrações`.
 
 ### 12.5 Layout de saída segmentado por repo
 ```
@@ -401,7 +399,7 @@ Resultado: enriquecer cada US/PBI com `relatedPullRequests[]`/`relatedRepos[]`, 
 - (d) Tests + QA.
 
 ### 12.8 Questões a confirmar (antes de implementar a Fase 5)
-1. **"Integrações" é uma Collection ou um Project** dentro de uma Collection? (muda a URL base).
+1. ✅ **RESOLVIDO:** "Integrações" é um **Project** na collection `NDD-DECollection` (multi-project, single collection).
 2. O PAT atual tem scope de **Code (read)** na Integrações (além de Work Items + Build)?
 3. Quais repos pertencem ao MacGyver — todos da Integrações ou um subconjunto (por nome/convenção)?
 4. O vínculo work item ↔ repo deve vir de **PR**, **commit message** ou **branch**? (ou todos, com prioridade)

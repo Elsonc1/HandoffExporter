@@ -98,7 +98,8 @@ namespace HandoffExporter
             string collection = null, project = null, areaPath = null, output = null, mode = "pbi";
             int? pbiId = null;
             bool includeIssues = false;
-            string splitDir = null, splitFrom = null;
+            string splitDir = null, splitFrom = null, team = null, reposProject = null;
+            bool includeRepos = false;
 
             if (args.Length == 0)
             {
@@ -109,6 +110,7 @@ namespace HandoffExporter
                 mode = !string.IsNullOrWhiteSpace(config.Mode) ? config.Mode : "pbi";
                 includeIssues = false;
                 pbiId = null;
+                reposProject = config.ReposProject;
             }
             else
             {
@@ -123,7 +125,17 @@ namespace HandoffExporter
                     else if (args[i] == "--output" && i + 1 < args.Length) output = args[++i];
                     else if (args[i] == "--split" && i + 1 < args.Length) splitDir = args[++i];
                     else if (args[i] == "--splitFrom" && i + 1 < args.Length) splitFrom = args[++i];
+                    else if (args[i] == "--team" && i + 1 < args.Length) team = args[++i];
+                    else if (args[i] == "--includeRepos" && i + 1 < args.Length) includeRepos = bool.Parse(args[++i]);
+                    else if (args[i] == "--reposProject" && i + 1 < args.Length) reposProject = args[++i];
                 }
+            }
+
+            // Fase 2b — escopo de time: --team resolve a area e o diretório de split padrão.
+            if (!string.IsNullOrEmpty(team))
+            {
+                if (string.IsNullOrEmpty(areaPath)) areaPath = team;
+                if (string.IsNullOrEmpty(splitDir)) splitDir = $"export/{team.ToLowerInvariant()}";
             }
 
             // Offline split: lê um HandoffJson existente e o quebra em sub-arquivos, sem chamar o TFS.
@@ -150,7 +162,7 @@ namespace HandoffExporter
 
             if (string.IsNullOrEmpty(collection) || string.IsNullOrEmpty(project) || string.IsNullOrEmpty(areaPath) || string.IsNullOrEmpty(output))
             {
-                Console.WriteLine("Usage: HandoffExporter --collection <c> --project <p> --areaPath <a> [--pbiId <id>] [--includeIssues <true/false>] [--mode pbi|all-artifacts] --output <file> [--split <dir>]");
+                Console.WriteLine("Usage: HandoffExporter [--team <name>] --collection <c> --project <p> [--areaPath <a>] [--pbiId <id>] [--includeIssues <bool>] [--mode pbi|all-artifacts] --output <file> [--split <dir>] [--includeRepos <bool>] [--reposProject <name>]");
                 Console.WriteLine("   or: HandoffExporter --splitFrom <file> [--split <dir>]   (offline, sem TFS)");
                 return 1;
             }
@@ -238,6 +250,15 @@ namespace HandoffExporter
                 if (!string.IsNullOrEmpty(splitDir))
                 {
                     HandoffSplitter.Split(handoffJson, splitDir, logHelper);
+
+                    // Fase 5 — repos do MacGyver vivem em outro Project (mesma Collection): NDD-DECollection/Integrações.
+                    if (includeRepos)
+                    {
+                        var rp = !string.IsNullOrEmpty(reposProject) ? reposProject : "Integrações";
+                        var git = new GitQueryService(collection, rp, tfsService._httpClient, logHelper);
+                        var repos = await git.GetRepositoriesWithBranchesAsync();
+                        RepoWriter.Write(repos, splitDir, logHelper);
+                    }
                 }
                 return 0;
             }

@@ -8,8 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- O projeto de testes (Tests/) tem o próprio .csproj; não compilar aqui. -->
+    <!-- Projetos com .csproj próprio (Tests/, Mcp/) não devem ser compilados aqui. -->
     <Compile Remove="Tests/**/*.cs" />
+    <Compile Remove="Mcp/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>

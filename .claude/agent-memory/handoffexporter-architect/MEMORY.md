@@ -9,12 +9,13 @@ _(nenhuma ainda)_
 
 ## Roadmap (ver `docs/architecture/mcp-server-and-tfs-evolution-spec.md`)
 
-- [x] Fase 1 — Split do JSON ✅ implementada + QA APROVADO (`docs/qa/fase-1-split.md`); logging via ILogHelper; 21 testes verdes
-- [x] Fase 2a — Enrich Item com State + AcceptanceCriteria (ndd.DefinicoesTecnicas) ✅ implementado + emitido no split
-- [ ] Fase 2b — Polir escopo do time MacGyver (`Central de Soluções\MacGyver`)
-- [~] Fase 3 — Builds/timeline/logs — **DESBLOQUEADA + PLANEJADA** (`docs/architecture/fase-3-builds-plan.md`, PLAN_READY h-3). ⚠️ scrub de segredos em logs é obrigatório
-- [ ] Fase 4 — MCP server local (lê os sub-arquivos do split)
-- [ ] Fase 5 — Segmentação por repositório (multi-collection: Integrações) — análise na §12 da spec
+- [x] Fase 1 — Split do JSON ✅ QA APROVADO; logging via ILogHelper
+- [x] Fase 2a — Enrich Item com State + AcceptanceCriteria (ndd.DefinicoesTecnicas) ✅
+- [x] Fase 2b — Escopo MacGyver ✅ flag `--team` (area + splitDir default `export/<team>`)
+- [~] Fase 3 — Builds/timeline/logs — DESBLOQUEADA + PLANEJADA (`fase-3-builds-plan.md`, PLAN_READY h-3). build def = pipeline CI (≠ repo); pré-req: confirmar se MacGyver usa Azure Pipelines. ⚠️ scrub de segredos em logs
+- [~] Fase 4 — MCP server local — PLANEJADO (`fase-4-mcp-server-plan.md`); recomendado .NET (ModelContextProtocol) como dotnet tool, stdio
+- [~] Fase 5 — Repos **multi-PROJECT** (corrigido: single collection NDD-DECollection, project Integrações) — ✅ START: `GitQueryService`+`RepoWriter`+`--includeRepos` (lista repos+branches). Falta join work item↔repo (§12.6) + commits/PRs
+- **Testes: 30/30 verdes** (`Tests/`, xUnit). Lembrete: `<Compile Remove="Tests/**/*.cs" />` no csproj principal.
 
 ## Decisions Log
 
