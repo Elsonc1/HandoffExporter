@@ -66,9 +66,8 @@ Precedência do diretório: `--export <dir>` → env `HANDOFF_EXPORT_DIR` → `.
 
 | Tool | O que faz |
 |------|-----------|
-| `list_pbis` | catálogo de PBIs (index.json) |
-| `get_pbi(id)` | PBI completo |
-| `get_us(id)` | User Story completa (description, acceptanceCriteria, parentPbiId) |
+| `list_items` | catálogo (index.json): counts por tipo, roots, items |
+| `get_item(id)` | work item completo de **qualquer tipo** (PBI/US/Sprint Task/Spike/...), resolve via index |
 | `search(query)` | busca em title/description/acceptanceCriteria |
 | `list_repos` | repositórios (repos/index.json) |
 | `get_repo(name)` | repo (metadata + branches) |

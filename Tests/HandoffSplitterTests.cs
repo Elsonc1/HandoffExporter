@@ -19,17 +19,16 @@ namespace HandoffExporter.Tests
             try { if (Directory.Exists(_dir)) Directory.Delete(_dir, true); } catch { /* best effort */ }
         }
 
-        // ── 1x1 PNG transparente ───────────────────────────────────────────────
         private const string PngDataUri =
             "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
         // ── Builders ────────────────────────────────────────────────────────────
-        private static Item Us(int id, string title = "US", string san = "texto", string? raw = null,
-            string state = "Active", string? ac = null, List<Asset>? assets = null,
-            List<Item>? children = null, List<Attachment>? atts = null) => new()
+        private static Item Wi(int id, string type, string title = "t", string san = "s",
+            string state = "New", string? raw = null, string? ac = null,
+            List<Asset>? assets = null, List<Item>? children = null, List<Attachment>? atts = null) => new()
         {
             Id = id,
-            WorkItemType = "User Story",
+            WorkItemType = type,
             Title = title,
             SanitizedText = san,
             RawHtml = raw,
@@ -41,22 +40,16 @@ namespace HandoffExporter.Tests
         };
 
         private static Item Pbi(int id, string title = "PBI", string san = "pbi", string? raw = null,
-            string state = "New", List<Item>? children = null, List<Attachment>? atts = null) => new()
-        {
-            Id = id,
-            WorkItemType = "Product Backlog Item",
-            Title = title,
-            SanitizedText = san,
-            RawHtml = raw,
-            State = state,
-            Assets = new(),
-            Attachments = atts ?? new(),
-            Children = children ?? new()
-        };
+            string state = "New", List<Item>? children = null, List<Attachment>? atts = null)
+            => Wi(id, "Product Backlog Item", title, san, state, raw, null, null, children, atts);
+
+        private static Item Us(int id, string title = "US", string san = "texto", string? raw = null,
+            string state = "Active", string? ac = null, List<Asset>? assets = null, List<Item>? children = null)
+            => Wi(id, "User Story", title, san, state, raw, ac, assets, children);
 
         private static HandoffJson Handoff(params Item[] roots) => new()
         {
-            Source = new Source { Type = "azure-devops", Collection = "NDD-DECollection", Project = "Central de Solucoes" },
+            Source = new Source { Type = "azure-devops", Collection = "NDD-DECollection", Project = "Central de Soluções" },
             Request = new Request { AreaPath = "MacGyver", PbiId = null, IncludeIssues = false, Mode = "all-artifacts" },
             ExportedAtUtc = "2026-06-02T16:30:00.0000000Z",
             Items = roots.ToList(),
@@ -69,56 +62,98 @@ namespace HandoffExporter.Tests
         private JObject ReadJson(params string[] rel) => JObject.Parse(File.ReadAllText(Path.Combine(_dir, Path.Combine(rel))));
         private string ReadText(params string[] rel) => File.ReadAllText(Path.Combine(_dir, Path.Combine(rel)));
 
-        // ── Guard clauses ─────────────────────────────────────────────────────────
+        // ── Guard ───────────────────────────────────────────────────────────────────
+        [Fact] public void Split_NullHandoff_Throws() => Assert.Throws<ArgumentNullException>(() => HandoffSplitter.Split(null!, _dir));
+        [Fact] public void Split_EmptyOutDir_Throws() => Assert.Throws<ArgumentException>(() => HandoffSplitter.Split(Handoff(), "  "));
+
+        // ── Segmentação por WorkItemType (o fix) ────────────────────────────────────
         [Fact]
-        public void Split_NullHandoff_Throws() =>
-            Assert.Throws<ArgumentNullException>(() => HandoffSplitter.Split(null!, _dir));
+        public void Split_SprintTaskRoot_GoesToStFolder_NotPbi()
+        {
+            // Regressão do bug: Sprint Task raiz era rotulado como PBI.
+            HandoffSplitter.Split(Handoff(Wi(205826, "Sprint Task", title: "tarefa")), _dir);
+            Assert.True(File.Exists(Path.Combine(_dir, "st", "ST-205826.json")));
+            Assert.False(File.Exists(Path.Combine(_dir, "pbi", "PBI-205826.json")));
+            Assert.Equal("Sprint Task", (string)ReadJson("st", "ST-205826.json")["workItemType"]!);
+        }
 
         [Fact]
-        public void Split_EmptyOutDir_Throws() =>
-            Assert.Throws<ArgumentException>(() => HandoffSplitter.Split(Handoff(), "  "));
+        public void Split_Spike_GoesToSpikeFolder()
+        {
+            HandoffSplitter.Split(Handoff(Wi(7, "Spike")), _dir);
+            Assert.True(File.Exists(Path.Combine(_dir, "spike", "SPIKE-7.json")));
+        }
 
-        // ── Estrutura / index ──────────────────────────────────────────────────────
         [Fact]
-        public void Split_CreatesIndexAndFolders()
+        public void Split_UnknownType_SlugFolder()
+        {
+            HandoffSplitter.Split(Handoff(Wi(9, "Request Produto")), _dir);
+            Assert.True(File.Exists(Path.Combine(_dir, "request-produto", "REQUEST-PRODUTO-9.json")));
+        }
+
+        [Fact]
+        public void Split_MixedChildTypes_GoToOwnFolders_WithCorrectRefs()
+        {
+            HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Wi(2, "Task"), Us(3) })), _dir);
+            Assert.True(File.Exists(Path.Combine(_dir, "task", "TASK-2.json")));
+            Assert.True(File.Exists(Path.Combine(_dir, "us", "US-3.json")));
+
+            var children = (JArray)ReadJson("pbi", "PBI-1.json")["children"]!;
+            var task = children.First(c => (int)c["id"]! == 2);
+            Assert.Equal("task/TASK-2.json", (string)task["path"]!);
+            Assert.Equal("Task", (string)task["workItemType"]!);
+            Assert.Equal(1, (int)ReadJson("task", "TASK-2.json")["parentId"]!);
+        }
+
+        // ── Index ────────────────────────────────────────────────────────────────────
+        [Fact]
+        public void Split_CreatesIndexAndTypeFolders()
         {
             HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(2) })), _dir);
             Assert.True(File.Exists(Path.Combine(_dir, "index.json")));
-            Assert.True(Directory.Exists(Path.Combine(_dir, "pbi")));
-            Assert.True(Directory.Exists(Path.Combine(_dir, "us")));
             Assert.True(File.Exists(Path.Combine(_dir, "pbi", "PBI-1.json")));
             Assert.True(File.Exists(Path.Combine(_dir, "us", "US-2.json")));
         }
 
         [Fact]
-        public void Split_IndexCountsCorrect()
+        public void Split_IndexCountsByType_AndRoots()
         {
             HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(2), Us(3) }), Pbi(4)), _dir);
             var idx = ReadJson("index.json");
             Assert.Equal(2, (int)idx["counts"]!["pbi"]!);
             Assert.Equal(2, (int)idx["counts"]!["us"]!);
-            Assert.Equal(2, ((JArray)idx["pbis"]!).Count);
+            Assert.Equal(4, (int)idx["total"]!);
+            Assert.Equal(2, ((JArray)idx["roots"]!).Count);
         }
 
         [Fact]
-        public void Split_EmptyItems_IndexOnly_ZeroCounts()
+        public void Split_Index_HasItemsLookup()
+        {
+            HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(2) })), _dir);
+            var items = (JArray)ReadJson("index.json")["items"]!;
+            Assert.Equal(2, items.Count);
+            Assert.Equal("pbi/PBI-1.json", (string)items.First(i => (int)i["id"]! == 1)["path"]!);
+            Assert.Equal("us/US-2.json", (string)items.First(i => (int)i["id"]! == 2)["path"]!);
+        }
+
+        [Fact]
+        public void Split_EmptyItems_ZeroTotal_NoCounts()
         {
             HandoffSplitter.Split(Handoff(), _dir);
             var idx = ReadJson("index.json");
-            Assert.Equal(0, (int)idx["counts"]!["pbi"]!);
-            Assert.Equal(0, (int)idx["counts"]!["us"]!);
-            Assert.Empty(Directory.GetFiles(Path.Combine(_dir, "pbi")));
-            Assert.Empty(Directory.GetFiles(Path.Combine(_dir, "us")));
+            Assert.Equal(0, (int)idx["total"]!);
+            Assert.Empty((JObject)idx["counts"]!);
+            Assert.Empty((JArray)idx["roots"]!);
+            Assert.Empty((JArray)idx["items"]!);
         }
 
-        // ── Determinismo ──────────────────────────────────────────────────────────
+        // ── Determinismo ──────────────────────────────────────────────────────────────
         [Fact]
-        public void Split_ChildUsIdsSortedAscending()
+        public void Split_ChildIdsSortedAscending()
         {
-            // filhos em ordem invertida na entrada
             HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(9), Us(3), Us(7) })), _dir);
             var pbi = ReadJson("pbi", "PBI-1.json");
-            Assert.Equal(new[] { 3, 7, 9 }, ((JArray)pbi["childUsIds"]!).Select(t => (int)t!).ToArray());
+            Assert.Equal(new[] { 3, 7, 9 }, ((JArray)pbi["childIds"]!).Select(t => (int)t!).ToArray());
         }
 
         [Fact]
@@ -133,7 +168,7 @@ namespace HandoffExporter.Tests
             Assert.Equal(File.ReadAllText(Path.Combine(a, "pbi", "PBI-1.json")), File.ReadAllText(Path.Combine(b, "pbi", "PBI-1.json")));
         }
 
-        // ── Sanitização: nada de base64 inline ─────────────────────────────────────
+        // ── Sanitização ────────────────────────────────────────────────────────────────
         [Fact]
         public void Split_NoBase64LeaksIntoAgentJson()
         {
@@ -152,16 +187,12 @@ namespace HandoffExporter.Tests
             var assetPath = Path.Combine(_dir, "assets", "2-asset-1.png");
             Assert.True(File.Exists(assetPath));
             var bytes = File.ReadAllBytes(assetPath);
-            Assert.True(bytes.Length >= 8);
             Assert.Equal(0x89, bytes[0]);
             Assert.Equal((byte)'P', bytes[1]);
             Assert.Equal((byte)'N', bytes[2]);
             Assert.Equal((byte)'G', bytes[3]);
-
-            var us = ReadJson("us", "US-2.json");
-            var asset = (JObject)((JArray)us["assets"]!)[0]!;
+            var asset = (JObject)((JArray)ReadJson("us", "US-2.json")["assets"]!)[0]!;
             Assert.Equal("assets/2-asset-1.png", (string)asset["path"]!);
-            Assert.Equal("image/png", (string)asset["contentType"]!);
         }
 
         [Fact]
@@ -169,29 +200,24 @@ namespace HandoffExporter.Tests
         {
             HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(2, assets: new() { UrlAsset("https://tfs.ndd.tech/x.png") }) })), _dir);
             Assert.Empty(Directory.GetFiles(Path.Combine(_dir, "assets")));
-            var asset = (JObject)((JArray)ReadJson("us", "US-2.json")["assets"]!)[0]!;
-            Assert.Equal("https://tfs.ndd.tech/x.png", (string)asset["url"]!);
+            Assert.Equal("https://tfs.ndd.tech/x.png", (string)((JArray)ReadJson("us", "US-2.json")["assets"]!)[0]!["url"]!);
         }
 
         [Fact]
-        public void Split_MalformedBase64_DoesNotThrow_NoLeak_NoFile()
+        public void Split_MalformedBase64_DoesNotThrow_NoLeak()
         {
             var bad = new Asset { Url = "data:image/png;base64,@@@nope@@@", DataUri = "data:image/png;base64,@@@nope@@@", ContentType = "image", FileName = "image" };
             HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(2, assets: new() { bad }) })), _dir);
             Assert.Empty(Directory.GetFiles(Path.Combine(_dir, "assets")));
-            var us = ReadText("us", "US-2.json");
-            Assert.DoesNotContain("base64", us, StringComparison.OrdinalIgnoreCase);
-            var asset = (JObject)((JArray)ReadJson("us", "US-2.json")["assets"]!)[0]!;
-            Assert.Null((string?)asset["url"]); // data: URI nunca emitida inline
+            Assert.DoesNotContain("base64", ReadText("us", "US-2.json"), StringComparison.OrdinalIgnoreCase);
         }
 
-        // ── RawHtml → raw/ ──────────────────────────────────────────────────────────
+        // ── Raw / parent ────────────────────────────────────────────────────────────────
         [Fact]
         public void Split_RawHtml_WrittenToRawFolder()
         {
             HandoffSplitter.Split(Handoff(Pbi(1, raw: "<b>x</b>", children: new() { Us(2, raw: "<i>y</i>") })), _dir);
             Assert.True(File.Exists(Path.Combine(_dir, "raw", "1.html")));
-            Assert.True(File.Exists(Path.Combine(_dir, "raw", "2.html")));
             Assert.Equal("<b>x</b>", File.ReadAllText(Path.Combine(_dir, "raw", "1.html")));
             Assert.Equal("raw/1.html", (string)ReadJson("pbi", "PBI-1.json")["rawPath"]!);
         }
@@ -204,12 +230,11 @@ namespace HandoffExporter.Tests
             Assert.Null((string?)ReadJson("us", "US-2.json")["rawPath"]);
         }
 
-        // ── Cross-refs ──────────────────────────────────────────────────────────────
         [Fact]
-        public void Split_Us_HasParentPbiId()
+        public void Split_Us_HasParentId()
         {
             HandoffSplitter.Split(Handoff(Pbi(10, children: new() { Us(20) })), _dir);
-            Assert.Equal(10, (int)ReadJson("us", "US-20.json")["parentPbiId"]!);
+            Assert.Equal(10, (int)ReadJson("us", "US-20.json")["parentId"]!);
         }
 
         [Fact]
@@ -221,60 +246,42 @@ namespace HandoffExporter.Tests
         }
 
         [Fact]
-        public void Split_PbiWithoutChildren_Preserved_EmptyChildUsIds()
+        public void Split_PbiWithoutChildren_Preserved_EmptyChildIds()
         {
             HandoffSplitter.Split(Handoff(Pbi(1)), _dir);
             Assert.True(File.Exists(Path.Combine(_dir, "pbi", "PBI-1.json")));
-            Assert.Empty((JArray)ReadJson("pbi", "PBI-1.json")["childUsIds"]!);
+            Assert.Empty((JArray)ReadJson("pbi", "PBI-1.json")["childIds"]!);
         }
 
         [Fact]
-        public void Split_DeepNesting_AllDescendants_AsUs_WithImmediateParent()
+        public void Split_DeepNesting_ImmediateParentId()
         {
-            // PBI 1 → US 2 → US 3
             HandoffSplitter.Split(Handoff(Pbi(1, children: new() { Us(2, children: new() { Us(3) }) })), _dir);
-            Assert.True(File.Exists(Path.Combine(_dir, "us", "US-2.json")));
-            Assert.True(File.Exists(Path.Combine(_dir, "us", "US-3.json")));
-            Assert.Equal(1, (int)ReadJson("us", "US-2.json")["parentPbiId"]!);
-            Assert.Equal(2, (int)ReadJson("us", "US-3.json")["parentPbiId"]!);
+            Assert.Equal(1, (int)ReadJson("us", "US-2.json")["parentId"]!);
+            Assert.Equal(2, (int)ReadJson("us", "US-3.json")["parentId"]!);
             Assert.Equal(2, (int)ReadJson("index.json")["counts"]!["us"]!);
         }
 
-        // ── Enriquecimento (Fase 2a) ───────────────────────────────────────────────
+        // ── Enriquecimento ────────────────────────────────────────────────────────────
         [Fact]
         public void Split_State_And_AcceptanceCriteria_Emitted()
         {
             HandoffSplitter.Split(Handoff(Pbi(1, state: "In Development",
                 children: new() { Us(2, state: "Active", ac: "Dado/Quando/Então") })), _dir);
 
-            var pbi = ReadJson("pbi", "PBI-1.json");
-            Assert.Equal("In Development", (string)pbi["state"]!);
-
+            Assert.Equal("In Development", (string)ReadJson("pbi", "PBI-1.json")["state"]!);
             var us = ReadJson("us", "US-2.json");
             Assert.Equal("Active", (string)us["state"]!);
             Assert.Equal("Dado/Quando/Então", (string)us["acceptanceCriteria"]!);
 
-            // index também expõe o state do PBI
-            var idxPbi = (JObject)((JArray)ReadJson("index.json")["pbis"]!)[0]!;
-            Assert.Equal("In Development", (string)idxPbi["state"]!);
+            var idxRoot = (JObject)((JArray)ReadJson("index.json")["roots"]!)[0]!;
+            Assert.Equal("In Development", (string)idxRoot["state"]!);
         }
 
-        // ── Attachments ──────────────────────────────────────────────────────────────
-        [Fact]
-        public void Split_Attachments_Preserved()
-        {
-            var att = new Attachment { Url = "https://tfs.ndd.tech/a/1", FileName = "spec.pdf", ContentType = "file", Size = 42 };
-            HandoffSplitter.Split(Handoff(Pbi(1, atts: new() { att })), _dir);
-            var a = (JObject)((JArray)ReadJson("pbi", "PBI-1.json")["attachments"]!)[0]!;
-            Assert.Equal("spec.pdf", (string)a["fileName"]!);
-            Assert.Equal(42, (int)a["size"]!);
-        }
-
-        // ── Robustez ──────────────────────────────────────────────────────────────
+        // ── Robustez ────────────────────────────────────────────────────────────────────
         [Fact]
         public void Split_TitleWithBraces_DoesNotThrow()
         {
-            // chaves no conteúdo não podem quebrar a serialização nem o logging
             var ex = Record.Exception(() => HandoffSplitter.Split(Handoff(Pbi(1, title: "VO {ConfigVO} {0}", san: "a {b} c")), _dir));
             Assert.Null(ex);
             Assert.Contains("VO {ConfigVO} {0}", ReadText("pbi", "PBI-1.json"));

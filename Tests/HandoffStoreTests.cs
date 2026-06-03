@@ -29,7 +29,9 @@ namespace HandoffExporter.Tests
                         {
                             new() { Id = 101, WorkItemType = "User Story", Title = "Tela de login",
                                     SanitizedText = "regra de negócio da autenticação", AcceptanceCriteria = "Dado usuário válido",
-                                    State = "Active", Assets = new(), Attachments = new(), Children = new() }
+                                    State = "Active", Assets = new(), Attachments = new(), Children = new() },
+                            new() { Id = 102, WorkItemType = "Sprint Task", Title = "ajuste fino",
+                                    SanitizedText = "task de sprint", State = "Done", Assets = new(), Attachments = new(), Children = new() }
                         }
                     }
                 },
@@ -54,58 +56,58 @@ namespace HandoffExporter.Tests
             var idx = _store.GetIndex();
             Assert.NotNull(idx);
             Assert.Contains("\"pbi\": 1", idx);
+            Assert.Contains("\"st\": 1", idx); // Sprint Task contabilizada na pasta certa
         }
 
         [Fact]
-        public void GetPbi_ReturnsPbiJson()
+        public void GetItem_Pbi_ResolvedByType()
         {
-            var pbi = _store.GetPbi(100);
+            var pbi = _store.GetItem(100);
             Assert.NotNull(pbi);
             Assert.Contains("Integração ConfigVO", pbi);
             Assert.Contains("In Development", pbi);
         }
 
         [Fact]
-        public void GetUs_ReturnsUsJson_WithParentAndAc()
+        public void GetItem_Us_HasParentAndAc()
         {
-            var us = _store.GetUs(101);
+            var us = _store.GetItem(101);
             Assert.NotNull(us);
-            Assert.Contains("\"parentPbiId\": 100", us);
+            Assert.Contains("\"parentId\": 100", us);
             Assert.Contains("Dado usuário válido", us);
         }
 
         [Fact]
-        public void GetPbi_Missing_ReturnsNull() => Assert.Null(_store.GetPbi(999));
-
-        [Fact]
-        public void Search_ByTitle_FindsPbi()
+        public void GetItem_SprintTask_ResolvedFromStFolder()
         {
-            var hits = _store.Search("ConfigVO");
-            Assert.Contains(hits, h => h.Type == "pbi" && h.Id == 100);
+            // O id 102 é Sprint Task → vive em st/ST-102.json; GetItem resolve via index.
+            var st = _store.GetItem(102);
+            Assert.NotNull(st);
+            Assert.Contains("Sprint Task", st);
+            Assert.True(File.Exists(Path.Combine(_dir, "st", "ST-102.json")));
         }
 
         [Fact]
-        public void Search_ByDescription_FindsUs()
-        {
-            var hits = _store.Search("autenticação");
-            Assert.Contains(hits, h => h.Type == "us" && h.Id == 101);
-        }
+        public void GetItem_Missing_ReturnsNull() => Assert.Null(_store.GetItem(999));
 
         [Fact]
-        public void Search_ByAcceptanceCriteria_FindsUs()
-        {
-            var hits = _store.Search("usuário válido");
-            Assert.Contains(hits, h => h.Id == 101);
-        }
+        public void Search_ByTitle_FindsPbi() => Assert.Contains(_store.Search("ConfigVO"), h => h.Id == 100);
 
         [Fact]
-        public void Search_CaseInsensitive()
-        {
-            Assert.NotEmpty(_store.Search("configvo"));
-        }
+        public void Search_ByDescription_FindsUs() => Assert.Contains(_store.Search("autenticação"), h => h.Id == 101);
 
         [Fact]
-        public void Search_NoMatch_Empty() => Assert.Empty(_store.Search("zzz-nao-existe"));
+        public void Search_ByAcceptanceCriteria_FindsUs() => Assert.Contains(_store.Search("usuário válido"), h => h.Id == 101);
+
+        [Fact]
+        public void Search_ReturnsWorkItemTypeInHit()
+        {
+            var hit = _store.Search("ConfigVO").First(h => h.Id == 100);
+            Assert.Equal("Product Backlog Item", hit.Type);
+        }
+
+        [Fact] public void Search_CaseInsensitive() => Assert.NotEmpty(_store.Search("configvo"));
+        [Fact] public void Search_NoMatch_Empty() => Assert.Empty(_store.Search("zzz-nao-existe"));
 
         [Fact]
         public void Repos_IndexAndGet()

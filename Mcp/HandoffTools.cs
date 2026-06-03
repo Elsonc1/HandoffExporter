@@ -7,25 +7,21 @@ namespace HandoffExporter.Mcp
 {
     /// <summary>
     /// Tools MCP — wrappers finos sobre <see cref="HandoffStore"/> (lê o snapshot do split).
-    /// O <see cref="HandoffStore"/> é injetado via DI (singleton registrado no Program).
-    /// Nomes explícitos (snake_case) para ficarem estáveis no tools/list dos clientes.
+    /// Itens ficam em pastas por WorkItemType (pbi/us/st/spike/...); a resolução id→arquivo
+    /// é feita pelo index.json. O <see cref="HandoffStore"/> é injetado via DI.
     /// </summary>
     [McpServerToolType]
     public static class HandoffTools
     {
-        [McpServerTool(Name = "list_pbis"), Description("Lista os PBIs do snapshot do MacGyver (index.json): id, título, state, childUsIds.")]
-        public static string ListPbis(HandoffStore store)
+        [McpServerTool(Name = "list_items"), Description("Catálogo do snapshot do MacGyver (index.json): counts por tipo, roots (árvore) e items (id→path).")]
+        public static string ListItems(HandoffStore store)
             => store.GetIndex() ?? "{\"error\":\"index.json não encontrado — rode o export --split antes\"}";
 
-        [McpServerTool(Name = "get_pbi"), Description("Retorna o PBI completo (description, childUsIds, attachments, assets) pelo id.")]
-        public static string GetPbi(HandoffStore store, [Description("Id do PBI")] int id)
-            => store.GetPbi(id) ?? $"{{\"error\":\"PBI {id} não encontrado\"}}";
+        [McpServerTool(Name = "get_item"), Description("Retorna um work item completo (PBI, User Story, Sprint Task, Spike, etc.) pelo id — resolvido pelo tipo via index.")]
+        public static string GetItem(HandoffStore store, [Description("Id do work item")] int id)
+            => store.GetItem(id) ?? $"{{\"error\":\"work item {id} não encontrado\"}}";
 
-        [McpServerTool(Name = "get_us"), Description("Retorna a User Story completa (description, acceptanceCriteria, parentPbiId) pelo id.")]
-        public static string GetUs(HandoffStore store, [Description("Id da User Story")] int id)
-            => store.GetUs(id) ?? $"{{\"error\":\"US {id} não encontrada\"}}";
-
-        [McpServerTool(Name = "search"), Description("Busca por texto (case-insensitive) em title/description/acceptanceCriteria de PBIs e US. Retorna hits {type,id,title,path}.")]
+        [McpServerTool(Name = "search"), Description("Busca por texto (case-insensitive) em title/description/acceptanceCriteria de qualquer item. Retorna hits {type,id,title,path}.")]
         public static string Search(HandoffStore store, [Description("Texto a buscar")] string query)
             => JsonSerializer.Serialize(store.Search(query));
 
@@ -38,7 +34,7 @@ namespace HandoffExporter.Mcp
             => store.GetRepo(name) ?? $"{{\"error\":\"repo {name} não encontrado\"}}";
 
         [McpServerTool(Name = "get_links"), Description("Vínculos work item ↔ repositório (via PR) de um work item id: [{workItemId,repo,prId,prTitle}].")]
-        public static string GetLinks(HandoffStore store, [Description("Id do work item (PBI ou US)")] int workItemId)
+        public static string GetLinks(HandoffStore store, [Description("Id do work item")] int workItemId)
             => store.GetLinksForWorkItem(workItemId);
     }
 }

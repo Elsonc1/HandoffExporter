@@ -95,6 +95,8 @@ data-URIs base64 inflam o arquivo; navegar US específica exige reparsear tudo.
 
 ## 4. Fase 1 — Sanitização + Split do JSON
 
+> ⚠️ **Atualização (v3.0):** o split agora é **segmentado pelo WorkItemType real** (pbi/us/st/spike/... + slug p/ tipos não mapeados), não pela posição na árvore. O layout abaixo (pbi/us) é a ideia original; a forma vigente (index com counts-por-tipo + `items` lookup; arquivos com `parentId`/`children` por tipo; tools MCP `list_items`/`get_item`) está em **`docs/dev/split-by-type.md`**.
+
 ### 4.1 Layout proposto
 
 ```

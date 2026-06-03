@@ -8,19 +8,27 @@ namespace HandoffExporter.Services
 {
     /// <summary>
     /// Leitor read-only do snapshot de split (contraparte do <see cref="HandoffSplitter"/>).
-    /// É a base do MCP server (Fase 4): cada tool é um wrapper fino sobre estes métodos.
-    /// Não toca o TFS — só lê os arquivos em {exportDir}.
+    /// Os itens vivem em pastas por WorkItemType; o id→path é resolvido via `items` do index.json.
+    /// Base do MCP server (Fase 4). Não toca o TFS.
     /// </summary>
     public class HandoffStore
     {
         private readonly string _root;
+        private Dictionary<int, string>? _idToPath;
+
         public HandoffStore(string exportDir) => _root = exportDir;
 
         public bool Exists => File.Exists(Path.Combine(_root, "index.json"));
 
         public string? GetIndex() => ReadIfExists(Path.Combine(_root, "index.json"));
-        public string? GetPbi(int id) => ReadIfExists(Path.Combine(_root, "pbi", $"PBI-{id}.json"));
-        public string? GetUs(int id) => ReadIfExists(Path.Combine(_root, "us", $"US-{id}.json"));
+
+        /// <summary>Qualquer work item por id (PBI, US, Sprint Task, Spike, etc.), resolvido via index.</summary>
+        public string? GetItem(int id)
+        {
+            var map = IdToPath();
+            return map.TryGetValue(id, out var rel) ? ReadIfExists(Resolve(rel)) : null;
+        }
+
         public string? GetReposIndex() => ReadIfExists(Path.Combine(_root, "repos", "index.json"));
         public string? GetRepo(string name) => ReadIfExists(Path.Combine(_root, "repos", SafeName(name), "repo.json"));
         public string? GetLinks() => ReadIfExists(Path.Combine(_root, "repos", "links.json"));
@@ -38,23 +46,18 @@ namespace HandoffExporter.Services
             catch { return "[]"; }
         }
 
-        /// <summary>Busca case-insensitive em title/description/acceptanceCriteria de PBIs e US.</summary>
+        /// <summary>Busca case-insensitive em title/description/acceptanceCriteria de TODOS os itens (qualquer tipo).</summary>
         public List<SearchHit> Search(string query)
         {
             var hits = new List<SearchHit>();
             if (string.IsNullOrWhiteSpace(query)) return hits;
-            SearchDir(Path.Combine(_root, "pbi"), "pbi", query, hits);
-            SearchDir(Path.Combine(_root, "us"), "us", query, hits);
-            return hits.OrderBy(h => h.Id).ToList();
-        }
 
-        private static void SearchDir(string dir, string type, string query, List<SearchHit> hits)
-        {
-            if (!Directory.Exists(dir)) return;
-            foreach (var f in Directory.GetFiles(dir, "*.json").OrderBy(x => x, StringComparer.Ordinal))
+            foreach (var kv in IdToPath().OrderBy(k => k.Key))
             {
+                var full = Resolve(kv.Value);
+                if (!File.Exists(full)) continue;
                 JObject o;
-                try { o = JObject.Parse(File.ReadAllText(f)); }
+                try { o = JObject.Parse(File.ReadAllText(full)); }
                 catch { continue; }
 
                 var hay = string.Join("\n", new[]
@@ -65,14 +68,39 @@ namespace HandoffExporter.Services
                 if (hay.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
                     hits.Add(new SearchHit
                     {
-                        Type = type,
+                        Type = (string?)o["workItemType"] ?? "",
                         Id = (int?)o["id"] ?? 0,
                         Title = (string?)o["title"] ?? "",
-                        Path = $"{type}/{Path.GetFileName(f)}"
+                        Path = kv.Value
                     });
             }
+            return hits;
         }
 
+        // id→path (relativo à raiz) a partir do `items` do index.json. Cacheado (snapshot estático na sessão).
+        private Dictionary<int, string> IdToPath()
+        {
+            if (_idToPath != null) return _idToPath;
+            var map = new Dictionary<int, string>();
+            var idx = GetIndex();
+            if (idx != null)
+            {
+                try
+                {
+                    foreach (var it in (JArray?)JObject.Parse(idx)["items"] ?? new JArray())
+                    {
+                        var id = (int?)it["id"];
+                        var p = (string?)it["path"];
+                        if (id.HasValue && p != null) map[id.Value] = p;
+                    }
+                }
+                catch { /* index inválido → mapa vazio */ }
+            }
+            _idToPath = map;
+            return map;
+        }
+
+        private string Resolve(string relPath) => Path.Combine(_root, Path.Combine(relPath.Split('/')));
         private static string? ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : null;
 
         private static string SafeName(string name)
