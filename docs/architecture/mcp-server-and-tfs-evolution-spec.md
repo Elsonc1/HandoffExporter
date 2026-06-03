@@ -309,6 +309,7 @@ Papéis do squad nesta evolução:
 | 2 | Escopo MacGyver | `--team macgyver` (ou doc do uso de area); sub-areas opcionais |
 | 3 | Builds/timeline/logs | versão do TFS confirmada; `BuildQueryService`; `builds/` + `logs/` em texto; QA APROVADO |
 | 4 | MCP server local | tools mínimas (`list_pbis`/`get_pbi`/`get_us`/`search`); aponta p/ o split; doc de config |
+| 5 | Segmentação por repositório (multi-collection: Integrações) | `GitQueryService`; `export/macgyver/repos/`; join work item ↔ repo no index — **análise na §12** |
 
 ---
 
@@ -326,3 +327,81 @@ Papéis do squad nesta evolução:
 > ⚠️ **Segurança:** o repo será subido ao GitHub e o `config/config.xml` contém o PAT.
 > O `.gitignore` foi atualizado para ignorá-lo (`**/config.xml`). Antes do push, confirmar
 > que nenhum `config.xml` com PAT entrou no índice do git.
+
+---
+
+## 12. Análise — Segmentação por repositório (multi-collection)
+
+> Resposta ao pedido: "analisar para o projeto ser segmentado por repositório. Hoje o
+> time MacGyver usa duas Collection: Central de Soluções (quadro Kanban) e Integrações (repositórios)."
+> **Isto é análise/desenho (Fase 5), não implementação.**
+
+### 12.1 O cenário
+O MacGyver vive hoje em **dois endpoints distintos** do TFS:
+
+| Domínio | Endpoint | O que o exporter faz |
+|---------|----------|----------------------|
+| Work items (Kanban) | Collection `NDD-DECollection` / Project `Central de Soluções` | ✅ exporta PBIs/US (atual) |
+| Repositórios (código) | **Integrações** (Collection? Project?) | ❌ ainda não toca |
+
+### 12.2 O desafio arquitetural
+O exporter é **single-endpoint** hoje: `TFSAplicationProcess._baseUrl = https://tfs.ndd.tech/{org}/{project}`.
+Para incluir os repositórios da `Integrações`, precisa virar **multi-source**: um segundo
+`_baseUrl` (collection/project diferente), reusando o mesmo PAT/Basic.
+
+### 12.3 Git REST API (ADO Server 2022.2) — endpoints
+Base: `https://tfs.ndd.tech/{collection}/{project}/_apis/git/...`, api 6.0, Basic PAT.
+
+| Para | Endpoint |
+|------|----------|
+| Repositórios | `GET _apis/git/repositories?api-version=6.0` |
+| Repositório | `GET _apis/git/repositories/{repoId}` |
+| Branches/refs | `GET _apis/git/repositories/{repoId}/refs?filter=heads` |
+| Commits | `GET _apis/git/repositories/{repoId}/commits?searchCriteria.$top=N` |
+| Pull requests | `GET _apis/git/repositories/{repoId}/pullrequests?searchCriteria.status=all` |
+| Work items de um PR | `GET _apis/git/repositories/{repoId}/pullRequests/{prId}/workitems` |
+| Árvore/arquivos | `GET _apis/git/repositories/{repoId}/items?scopePath=/&recursionLevel=Full` |
+
+### 12.4 Config multi-source (proposta)
+`ConfigVO` ganha um bloco para a fonte de repositórios (PAT pode ser o mesmo):
+
+```xml
+<ReposSource>
+  <Collection>NDD-DECollection</Collection>   <!-- ou a collection da Integrações -->
+  <Project>Integrações</Project>
+  <Repositories>ALL</Repositories>            <!-- ou lista por nome -->
+</ReposSource>
+```
+
+### 12.5 Layout de saída segmentado por repo
+```
+export/macgyver/
+  index.json              (+ repos[] e relatedRepos nos work items)
+  pbi/ , us/              (work items — como na Fase 1)
+  repos/
+    <repo-name>/
+      repo.json           id, defaultBranch, size, remoteUrl, project
+      branches.json
+      pull-requests.json  (com workItemIds vinculados)
+      commits.json        (últimos N; ids citados em #<id>)
+```
+
+### 12.6 O join work item ↔ repositório (cross-collection)
+Três fontes possíveis de vínculo, em ordem de confiabilidade:
+1. **PR → work items** (`pullRequests/{id}/workitems`) — vínculo explícito e confiável.
+2. **Mensagem de commit** citando `#<id>`.
+3. **Nome de branch** (`feature/193404-...`).
+
+Resultado: enriquecer cada US/PBI com `relatedPullRequests[]`/`relatedRepos[]`, e cada repo com `relatedWorkItems[]`. Isso conecta o Kanban (Central de Soluções) ao código (Integrações) no mesmo snapshot offline.
+
+### 12.7 Sub-passos da Fase 5
+- (a) `ConfigVO.ReposSource` + segundo endpoint em `TFSAplicationProcess` (ou um `GitQueryService` próprio).
+- (b) Export de `repos/` (repo.json, branches, PRs, commits).
+- (c) Join work item ↔ repo no `index.json` + nos arquivos pbi/us.
+- (d) Tests + QA.
+
+### 12.8 Questões a confirmar (antes de implementar a Fase 5)
+1. **"Integrações" é uma Collection ou um Project** dentro de uma Collection? (muda a URL base).
+2. O PAT atual tem scope de **Code (read)** na Integrações (além de Work Items + Build)?
+3. Quais repos pertencem ao MacGyver — todos da Integrações ou um subconjunto (por nome/convenção)?
+4. O vínculo work item ↔ repo deve vir de **PR**, **commit message** ou **branch**? (ou todos, com prioridade)

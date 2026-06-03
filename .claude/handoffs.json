@@ -5,23 +5,40 @@
       "from": "handoffexporter-dev",
       "to": "handoffexporter-qa",
       "signal": "ENTREGA_PRONTA",
+      "consumed": true,
+      "payload": { "taskId": "fase-1-split", "title": "Fase 1 — Split do JSON (HandoffSplitter)" }
+    },
+    {
+      "id": "h-2",
+      "from": "handoffexporter-qa",
+      "to": "handoffexporter-architect",
+      "signal": "QA_APROVADO",
+      "consumed": true,
+      "payload": { "taskId": "fase-1-split", "gate": "APROVADO", "tests": "21/21", "doc": "docs/qa/fase-1-split.md" }
+    },
+    {
+      "id": "h-3",
+      "from": "handoffexporter-architect",
+      "to": "handoffexporter-dev",
+      "signal": "PLAN_READY",
       "consumed": false,
       "payload": {
-        "taskId": "fase-1-split",
-        "title": "Fase 1 — Sanitização + split do JSON (HandoffSplitter)",
-        "filesChanged": [
-          "Services/HandoffSplitter.cs (novo)",
-          "Program.cs (flags --split / --splitFrom; short-circuit offline; split pós-export)"
+        "taskId": "fase-3-builds",
+        "title": "Fase 3 — Builds/timeline/logs via Build API (TFS 2022.2)",
+        "plan": "docs/architecture/fase-3-builds-plan.md",
+        "files": [
+          "Models/BuildVO.cs (novo)",
+          "Services/BuildQueryService.cs (novo)",
+          "Program.cs (flags --includeBuilds/--buildsTop)",
+          "HandoffSplitter ou BuildWriter (escrever builds/ e logs/)",
+          "Tests/ (novos testes de build/timeline/scrub)"
         ],
-        "howToValidate": [
-          "dotnet build (Debug) — esperar 0 erros",
-          "Split offline: dotnet run -- --splitFrom <output.json> --split export/macgyver",
-          "Conferir index.json + cross-refs pai/filho; nenhum data-URI base64 em pbi/us/index; assets/ com imagens reais; raw/ só p/ itens com RawHtml"
+        "risks": [
+          "ALTO: logs de build podem conter segredos -> scrub obrigatorio antes de gravar",
+          "logs grandes -> truncar/priorizar etapas failed, sem cap silencioso",
+          "qual definition pertence ao MacGyver -> confirmar convencao"
         ],
-        "doc": "docs/dev/fase-1-split.md",
-        "knownFollowUps": [
-          "acceptanceCriteria/state saem null — exportador nao captura ndd.DefinicoesTecnicas/System.State (Fase 2)"
-        ]
+        "buildCommand": "dotnet build \"...\\HandoffExporter.csproj\" -c Debug && dotnet test \"...\\Tests\\HandoffExporter.Tests.csproj\""
       }
     }
   ]

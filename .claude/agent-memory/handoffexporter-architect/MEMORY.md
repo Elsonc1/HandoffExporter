@@ -9,10 +9,12 @@ _(nenhuma ainda)_
 
 ## Roadmap (ver `docs/architecture/mcp-server-and-tfs-evolution-spec.md`)
 
-- [x] Fase 1 — Split do JSON ✅ implementada e validada offline (`docs/dev/fase-1-split.md`); pendente QA formal
-- [ ] Fase 2 — Polir escopo do time MacGyver (`Central de Soluções\MacGyver`); + enriquecer Item com State/AcceptanceCriteria (ndd.DefinicoesTecnicas)
-- [ ] Fase 3 — Extensão TFS REST: builds / timeline / logs — **TFS 2022.2 confirmado + PAT com Build read → desbloqueada** (Build API api 6.0; Pipelines API disponível)
+- [x] Fase 1 — Split do JSON ✅ implementada + QA APROVADO (`docs/qa/fase-1-split.md`); logging via ILogHelper; 21 testes verdes
+- [x] Fase 2a — Enrich Item com State + AcceptanceCriteria (ndd.DefinicoesTecnicas) ✅ implementado + emitido no split
+- [ ] Fase 2b — Polir escopo do time MacGyver (`Central de Soluções\MacGyver`)
+- [~] Fase 3 — Builds/timeline/logs — **DESBLOQUEADA + PLANEJADA** (`docs/architecture/fase-3-builds-plan.md`, PLAN_READY h-3). ⚠️ scrub de segredos em logs é obrigatório
 - [ ] Fase 4 — MCP server local (lê os sub-arquivos do split)
+- [ ] Fase 5 — Segmentação por repositório (multi-collection: Integrações) — análise na §12 da spec
 
 ## Decisions Log
 

@@ -43,6 +43,8 @@ namespace HandoffExporter
         public string Title { get; set; }
         public string RawHtml { get; set; }
         public string SanitizedText { get; set; }
+        public string State { get; set; }
+        public string AcceptanceCriteria { get; set; }
         public List<Asset> Assets { get; set; }
         public List<Attachment> Attachments { get; set; }
         public List<Item> Children { get; set; }
@@ -76,6 +78,8 @@ namespace HandoffExporter
     {
         static async Task<int> Main(string[] args)
         {
+            ILogHelper logHelper = new LogHelper();
+
             // Initialize configuration
             IXmlHelper xmlHelper = new XmlHelper();
             IConfigManager configManager;
@@ -85,7 +89,7 @@ namespace HandoffExporter
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Failed to load configuration: {ex.Message}");
+                logHelper.Error("Failed to load configuration: {0}", ex.Message);
                 return 1;
             }
 
@@ -130,17 +134,16 @@ namespace HandoffExporter
                     var existing = JsonConvert.DeserializeObject<HandoffJson>(File.ReadAllText(splitFrom));
                     if (existing == null)
                     {
-                        Console.Error.WriteLine($"Split source vazio/inválido: {splitFrom}");
+                        logHelper.Error("Split source vazio/invalido: {0}", splitFrom);
                         return 1;
                     }
                     var dir = !string.IsNullOrEmpty(splitDir) ? splitDir : "export";
-                    HandoffSplitter.Split(existing, dir);
-                    Console.WriteLine($"Split written to {dir}");
+                    HandoffSplitter.Split(existing, dir, logHelper);
                     return 0;
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Split error: {ex.Message}");
+                    logHelper.Error("Split error: {0}", ex.Message);
                     return 1;
                 }
             }
@@ -154,7 +157,6 @@ namespace HandoffExporter
 
             string pat = config.Key; // from config
 
-            var logHelper = new LogHelper();
             var tfsService = new TFSAplicationProcess(collection, project, pat);
             var queryService = new WorkItemQueryService(tfsService, logHelper);
 
@@ -178,7 +180,7 @@ namespace HandoffExporter
                 else if (mode == "all-artifacts")
                 {
                     var allItems = await queryService.GetAllArtifactsAsync(areaPath);
-                    Console.WriteLine($"all-artifacts: fetched {allItems.Count} items total");
+                    logHelper.Info("all-artifacts: fetched {0} items total", allItems.Count);
 
                     // Build set of child IDs referenced via Hierarchy-Forward relations
                     var childIds = new HashSet<int>();
@@ -198,7 +200,7 @@ namespace HandoffExporter
 
                     // Root items = not a child of any other item in the result set
                     var roots = allItems.Where(wi => !childIds.Contains(wi.Id)).ToList();
-                    Console.WriteLine($"all-artifacts: {roots.Count} root items, {childIds.Count} child references");
+                    logHelper.Info("all-artifacts: {0} root items, {1} child references", roots.Count, childIds.Count);
 
                     foreach (var root in roots)
                     {
@@ -231,18 +233,17 @@ namespace HandoffExporter
                 if (!string.IsNullOrWhiteSpace(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
                 File.WriteAllText(output, json);
-                Console.WriteLine($"Exported to {output}");
+                logHelper.Info("Exported to {0}", output);
 
                 if (!string.IsNullOrEmpty(splitDir))
                 {
-                    HandoffSplitter.Split(handoffJson, splitDir);
-                    Console.WriteLine($"Split written to {splitDir}");
+                    HandoffSplitter.Split(handoffJson, splitDir, logHelper);
                 }
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error: {ex.Message}");
+                logHelper.Error("Error: {0}", ex.Message);
                 return 1;
             }
         }
@@ -379,6 +380,17 @@ namespace HandoffExporter
             return (rawHtml, sanitizedText);
         }
 
+        static string ResolveAcceptanceCriteria(WorkItem wi, TFSAplicationProcess tfsService)
+        {
+            string GetField(string key) =>
+                wi.Fields?.ContainsKey(key) == true && !string.IsNullOrEmpty(wi.Fields[key]?.ToString())
+                    ? wi.Fields[key].ToString() : null;
+
+            // US guarda critérios em ndd.DefinicoesTecnicas; fallback para o campo padrão.
+            var raw = GetField("ndd.DefinicoesTecnicas") ?? GetField("Microsoft.VSTS.Common.AcceptanceCriteria");
+            return raw != null ? tfsService.ExtractTextFromHtml(raw) : null;
+        }
+
         static Item CreateItem(WorkItem wi, TFSAplicationProcess tfsService, ILogHelper logHelper)
         {
             var (rawHtml, sanitizedText) = ResolveContent(wi, tfsService, logHelper);
@@ -390,6 +402,8 @@ namespace HandoffExporter
                 Title = wi.Fields?.ContainsKey("System.Title") == true ? wi.Fields["System.Title"].ToString() : null,
                 RawHtml = rawHtml,
                 SanitizedText = sanitizedText,
+                State = wi.Fields?.ContainsKey("System.State") == true ? wi.Fields["System.State"]?.ToString() : null,
+                AcceptanceCriteria = ResolveAcceptanceCriteria(wi, tfsService),
                 Assets = new List<Asset>(),
                 Attachments = new List<Attachment>(),
                 Children = new List<Item>()
