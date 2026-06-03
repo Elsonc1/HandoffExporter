@@ -100,6 +100,7 @@ namespace HandoffExporter
             bool includeIssues = false;
             string splitDir = null, splitFrom = null, team = null, reposProject = null;
             bool includeRepos = false;
+            int reposTop = 25;
 
             if (args.Length == 0)
             {
@@ -128,6 +129,7 @@ namespace HandoffExporter
                     else if (args[i] == "--team" && i + 1 < args.Length) team = args[++i];
                     else if (args[i] == "--includeRepos" && i + 1 < args.Length) includeRepos = bool.Parse(args[++i]);
                     else if (args[i] == "--reposProject" && i + 1 < args.Length) reposProject = args[++i];
+                    else if (args[i] == "--reposTop" && i + 1 < args.Length) int.TryParse(args[++i], out reposTop);
                 }
             }
 
@@ -256,7 +258,7 @@ namespace HandoffExporter
                     {
                         var rp = !string.IsNullOrEmpty(reposProject) ? reposProject : "Integrações";
                         var git = new GitQueryService(collection, rp, tfsService._httpClient, logHelper);
-                        var repos = await git.GetRepositoriesWithBranchesAsync();
+                        var repos = await git.GetRepositoriesFullAsync(includePrs: true, includeCommits: true, top: reposTop);
                         RepoWriter.Write(repos, splitDir, logHelper);
                     }
                 }

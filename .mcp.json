@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "handoff-macgyver": {
+      "command": "ndd-handoff-mcp",
+      "args": ["--export", "C:\\Users\\elson.lopes\\source\\repos\\HandoffExporter\\export\\macgyver"]
+    }
+  }
+}

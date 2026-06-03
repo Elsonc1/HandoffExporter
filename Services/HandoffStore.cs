@@ -23,6 +23,20 @@ namespace HandoffExporter.Services
         public string? GetUs(int id) => ReadIfExists(Path.Combine(_root, "us", $"US-{id}.json"));
         public string? GetReposIndex() => ReadIfExists(Path.Combine(_root, "repos", "index.json"));
         public string? GetRepo(string name) => ReadIfExists(Path.Combine(_root, "repos", SafeName(name), "repo.json"));
+        public string? GetLinks() => ReadIfExists(Path.Combine(_root, "repos", "links.json"));
+
+        /// <summary>Vínculos (via PR) de um work item: array [{workItemId, repo, prId, prTitle}].</summary>
+        public string GetLinksForWorkItem(int workItemId)
+        {
+            var raw = GetLinks();
+            if (raw == null) return "[]";
+            try
+            {
+                var arr = (JArray?)JObject.Parse(raw)["links"] ?? new JArray();
+                return new JArray(arr.Where(l => (int?)l["workItemId"] == workItemId)).ToString();
+            }
+            catch { return "[]"; }
+        }
 
         /// <summary>Busca case-insensitive em title/description/acceptanceCriteria de PBIs e US.</summary>
         public List<SearchHit> Search(string query)

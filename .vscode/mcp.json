@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "handoff-macgyver": {
+      "type": "stdio",
+      "command": "ndd-handoff-mcp",
+      "args": ["--export", "${workspaceFolder}/export/macgyver"]
+    }
+  }
+}

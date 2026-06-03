@@ -72,6 +72,7 @@ Precedência do diretório: `--export <dir>` → env `HANDOFF_EXPORT_DIR` → `.
 | `search(query)` | busca em title/description/acceptanceCriteria |
 | `list_repos` | repositórios (repos/index.json) |
 | `get_repo(name)` | repo (metadata + branches) |
+| `get_links(id)` | vínculos work item↔repo via PR `[{workItemId,repo,prId,prTitle}]` |
 
 ## 7. Verificação
 

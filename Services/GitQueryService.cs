@@ -32,14 +32,14 @@ namespace HandoffExporter.Services
         public static string BuildBaseUrl(string collection, string project) =>
             $"{Host}/{collection}/{Uri.EscapeDataString(project)}";
 
-        public async Task<List<RepoInfo>> GetRepositoriesWithBranchesAsync()
+        /// <summary>Repos + branches + (opcional) PRs e commits — o pacote completo p/ o snapshot.</summary>
+        public async Task<List<RepoInfo>> GetRepositoriesFullAsync(bool includePrs = true, bool includeCommits = true, int top = 25)
         {
             var repos = await GetRepositoriesAsync();
             var result = new List<RepoInfo>();
             foreach (var r in repos.OrderBy(r => r.Name, StringComparer.Ordinal))
             {
-                var branches = await GetBranchesAsync(r.Id);
-                result.Add(new RepoInfo
+                var info = new RepoInfo
                 {
                     Id = r.Id,
                     Name = r.Name,
@@ -48,11 +48,17 @@ namespace HandoffExporter.Services
                     RemoteUrl = r.RemoteUrl,
                     WebUrl = r.WebUrl,
                     Project = r.Project?.Name,
-                    Branches = branches
-                });
+                    Branches = await GetBranchesAsync(r.Id)
+                };
+                if (includePrs) info.PullRequests = await GetPullRequestsAsync(r.Id, top);
+                if (includeCommits) info.Commits = await GetCommitsAsync(r.Id, top);
+                result.Add(info);
             }
             return result;
         }
+
+        public async Task<List<RepoInfo>> GetRepositoriesWithBranchesAsync()
+            => await GetRepositoriesFullAsync(includePrs: false, includeCommits: false);
 
         public async Task<List<GitRepo>> GetRepositoriesAsync()
         {
@@ -69,6 +75,55 @@ namespace HandoffExporter.Services
             return (parsed?.Value ?? new List<GitRef>())
                 .Select(r => r.Name.StartsWith("refs/heads/") ? r.Name.Substring("refs/heads/".Length) : r.Name)
                 .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>PRs (todos os status) + os work items vinculados a cada um (o "join" pedido).</summary>
+        public async Task<List<PrInfo>> GetPullRequestsAsync(string repoId, int top = 25)
+        {
+            var json = await GetAsync($"{_baseUrl}/_apis/git/repositories/{repoId}/pullrequests?searchCriteria.status=all&$top={top}&api-version=6.0");
+            var parsed = JsonConvert.DeserializeObject<GitPrResult>(json);
+            var result = new List<PrInfo>();
+            foreach (var pr in parsed?.Value ?? new List<GitPullRequest>())
+            {
+                result.Add(new PrInfo
+                {
+                    Id = pr.PullRequestId,
+                    Title = pr.Title,
+                    Status = pr.Status,
+                    SourceRefName = pr.SourceRefName,
+                    TargetRefName = pr.TargetRefName,
+                    CreatedBy = pr.CreatedBy?.DisplayName,
+                    CreationDate = pr.CreationDate,
+                    WorkItemIds = await GetPrWorkItemsAsync(repoId, pr.PullRequestId)
+                });
+            }
+            return result.OrderBy(p => p.Id).ToList();
+        }
+
+        public async Task<List<int>> GetPrWorkItemsAsync(string repoId, int prId)
+        {
+            var json = await GetAsync($"{_baseUrl}/_apis/git/repositories/{repoId}/pullRequests/{prId}/workitems?api-version=6.0");
+            var parsed = JsonConvert.DeserializeObject<ResourceRefResult>(json);
+            return (parsed?.Value ?? new List<ResourceRef>())
+                .Select(r => int.TryParse(r.Id, out var n) ? n : 0)
+                .Where(n => n > 0)
+                .OrderBy(n => n)
+                .ToList();
+        }
+
+        public async Task<List<CommitInfo>> GetCommitsAsync(string repoId, int top = 25)
+        {
+            var json = await GetAsync($"{_baseUrl}/_apis/git/repositories/{repoId}/commits?searchCriteria.$top={top}&api-version=6.0");
+            var parsed = JsonConvert.DeserializeObject<GitCommitResult>(json);
+            return (parsed?.Value ?? new List<GitCommit>())
+                .Select(c => new CommitInfo
+                {
+                    CommitId = c.CommitId,
+                    Comment = c.Comment,
+                    Author = c.Author?.Name,
+                    Date = c.Author?.Date
+                })
                 .ToList();
         }
 

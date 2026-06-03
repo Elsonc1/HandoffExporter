@@ -14,7 +14,8 @@ _(nenhuma ainda)_
 - [x] Fase 2b — Escopo MacGyver ✅ flag `--team` (area + splitDir default `export/<team>`)
 - [~] Fase 3 — Builds/timeline/logs — PLANEJADA (`fase-3-builds-plan.md`, PLAN_READY h-3). ✅ CONFIRMADO: MacGyver USA `azure-pipelines.yml` → pronta p/ implementar (Build API em NDD-DECollection/Integrações). ⚠️ scrub de segredos em logs obrigatório
 - [x] Fase 4 — MCP server local ✅ IMPLEMENTADO: `Mcp/HandoffExporter.Mcp` (.NET, ModelContextProtocol 1.3.0, stdio, dotnet tool `ndd-handoff-mcp`), 6 tools sobre `Services/HandoffStore.cs` (testado); `docs/mcp/INSTALL.md` (Claude Code + VS Code/Copilot). Smoke test OK (initialize+tools/list). Falta: extensão VS Code 1-clique (4d) + validar live
-- [~] Fase 5 — Repos multi-PROJECT (single collection NDD-DECollection, project Integrações) — ✅ START: lista repos+branches. ✅ vínculo confirmado = **PR**. Falta: join via `_apis/git/repositories/{id}/pullRequests/{prId}/workitems` + commits/PRs
+- [x] Fase 5 — Repos multi-PROJECT (NDD-DECollection/Integrações) — ✅ repos+branches + **join via PR** (`pull-requests.json`/`commits.json`/`links.json` + MCP `get_links` + `--reposTop`). ⏳ re-rodar `--includeRepos true` p/ gerar PRs/commits live (1ª run do usuário foi só repos+branches)
+- ✅ VALIDADO LIVE (usuário, 2026-06-03): 1694 work items MacGyver → 831 PBI/863 US/9 assets/982 raw; 14 repos da Integrações; MCP `ndd-handoff-mcp` instalado + `.mcp.json`
 - **Testes: 41/41 verdes** (`Tests/`, xUnit). Build: `<Compile Remove>` p/ `Tests/**` E `Mcp/**` no csproj principal (glob da raiz).
 
 ## Decisions Log

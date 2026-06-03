@@ -309,7 +309,7 @@ Papéis do squad nesta evolução:
 | 2 | Escopo MacGyver | `--team macgyver` (ou doc do uso de area); sub-areas opcionais |
 | 3 | Builds/timeline/logs | versão do TFS confirmada; `BuildQueryService`; `builds/` + `logs/` em texto; QA APROVADO |
 | 4 | MCP server local | tools mínimas (`list_pbis`/`get_pbi`/`get_us`/`search`); aponta p/ o split; doc de config |
-| 5 | Segmentação por repositório (multi-project: Integrações) | ✅ **START**: lista repos+branches (`GitQueryService`/`RepoWriter`, `--includeRepos`). Falta o join work item↔repo (§12.6) |
+| 5 | Segmentação por repositório (multi-project: Integrações) | ✅ repos+branches + **join via PR** (`pull-requests.json`/`commits.json`/`links.json`) + MCP `get_links`. Validar live a parte de PRs |
 
 ---
 
@@ -384,8 +384,10 @@ export/macgyver/
       commits.json        (últimos N; ids citados em #<id>)
 ```
 
-### 12.6 O join work item ↔ repositório (cross-collection)
-Três fontes possíveis de vínculo, em ordem de confiabilidade:
+### 12.6 O join work item ↔ repositório — ✅ IMPLEMENTADO (via PR)
+> Gera `repos/links.json` (`[{workItemId,repo,prId,prTitle}]`) + `pull-requests.json`/`commits.json` por repo + tool MCP `get_links`. Vínculo confirmado pelo usuário = **PR** (`pullRequests/{id}/workitems`).
+
+Fontes possíveis de vínculo, em ordem de confiabilidade:
 1. **PR → work items** (`pullRequests/{id}/workitems`) — vínculo explícito e confiável.
 2. **Mensagem de commit** citando `#<id>`.
 3. **Nome de branch** (`feature/193404-...`).

@@ -41,7 +41,13 @@ export/macgyver/
 - RepoWriter: index+per-repo, campos, ordenação determinística, branches ordenadas, null sem throw, char inválido de pasta (invariante index→arquivo).
 - Parse dos DTOs Git a partir de fixtures JSON.
 
-## Limites / próximos passos
-- `GitQueryService` faz HTTP real → validado com **dados reais** quando você rodar `--includeRepos true` (offline aqui foram testadas as partes puras + parsing).
-- Falta o **join work item ↔ repo** (PR/commit/branch) — §12.6 (Fase 5 continuação).
-- Commits/PRs ainda não exportados (só repos+branches nesta START).
+## Fase 5 join (PRs + commits + links) — adicionado
+- `GitQueryService`: `GetPullRequestsAsync` (+ `GetPrWorkItemsAsync`), `GetCommitsAsync`, `GetRepositoriesFullAsync`.
+- `RepoWriter`: `repos/<name>/pull-requests.json` (PRs + workItemIds), `commits.json`, e **`repos/links.json`** = join work item↔repo via PR (`[{workItemId,repo,prId,prTitle}]`, ordenado/determinístico).
+- `HandoffStore.GetLinksForWorkItem(id)` + tool MCP **`get_links`**.
+- CLI: `--includeRepos true` agora puxa repos+branches+**PRs+commits**; `--reposTop <N>` (default 25).
+- Testes: +8 (parse PR/commit/resourceref; escrita PRs/commits/links; agregação + filtro). **Total 49 verdes**.
+
+## Validação
+- ✅ Live: repos+branches (14 repos da Integrações) — execução do usuário.
+- ⏳ A parte de **PRs/commits/links** foi adicionada DEPOIS dessa execução → **re-rodar `--includeRepos true`** para gerar `pull-requests.json`/`commits.json`/`links.json` com o código novo.

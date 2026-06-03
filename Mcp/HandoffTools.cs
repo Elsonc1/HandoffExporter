@@ -36,5 +36,9 @@ namespace HandoffExporter.Mcp
         [McpServerTool(Name = "get_repo"), Description("Retorna o repositório (metadata + branches) pelo nome.")]
         public static string GetRepo(HandoffStore store, [Description("Nome do repositório")] string name)
             => store.GetRepo(name) ?? $"{{\"error\":\"repo {name} não encontrado\"}}";
+
+        [McpServerTool(Name = "get_links"), Description("Vínculos work item ↔ repositório (via PR) de um work item id: [{workItemId,repo,prId,prTitle}].")]
+        public static string GetLinks(HandoffStore store, [Description("Id do work item (PBI ou US)")] int workItemId)
+            => store.GetLinksForWorkItem(workItemId);
     }
 }
