@@ -12,10 +12,10 @@ _(nenhuma ainda)_
 - [x] Fase 1 — Split do JSON ✅ QA APROVADO; logging via ILogHelper
 - [x] Fase 2a — Enrich Item com State + AcceptanceCriteria (ndd.DefinicoesTecnicas) ✅
 - [x] Fase 2b — Escopo MacGyver ✅ flag `--team` (area + splitDir default `export/<team>`)
-- [~] Fase 3 — Builds/timeline/logs — DESBLOQUEADA + PLANEJADA (`fase-3-builds-plan.md`, PLAN_READY h-3). build def = pipeline CI (≠ repo); pré-req: confirmar se MacGyver usa Azure Pipelines. ⚠️ scrub de segredos em logs
-- [~] Fase 4 — MCP server local — PLANEJADO (`fase-4-mcp-server-plan.md`); recomendado .NET (ModelContextProtocol) como dotnet tool, stdio
-- [~] Fase 5 — Repos **multi-PROJECT** (corrigido: single collection NDD-DECollection, project Integrações) — ✅ START: `GitQueryService`+`RepoWriter`+`--includeRepos` (lista repos+branches). Falta join work item↔repo (§12.6) + commits/PRs
-- **Testes: 30/30 verdes** (`Tests/`, xUnit). Lembrete: `<Compile Remove="Tests/**/*.cs" />` no csproj principal.
+- [~] Fase 3 — Builds/timeline/logs — PLANEJADA (`fase-3-builds-plan.md`, PLAN_READY h-3). ✅ CONFIRMADO: MacGyver USA `azure-pipelines.yml` → pronta p/ implementar (Build API em NDD-DECollection/Integrações). ⚠️ scrub de segredos em logs obrigatório
+- [x] Fase 4 — MCP server local ✅ IMPLEMENTADO: `Mcp/HandoffExporter.Mcp` (.NET, ModelContextProtocol 1.3.0, stdio, dotnet tool `ndd-handoff-mcp`), 6 tools sobre `Services/HandoffStore.cs` (testado); `docs/mcp/INSTALL.md` (Claude Code + VS Code/Copilot). Smoke test OK (initialize+tools/list). Falta: extensão VS Code 1-clique (4d) + validar live
+- [~] Fase 5 — Repos multi-PROJECT (single collection NDD-DECollection, project Integrações) — ✅ START: lista repos+branches. ✅ vínculo confirmado = **PR**. Falta: join via `_apis/git/repositories/{id}/pullRequests/{prId}/workitems` + commits/PRs
+- **Testes: 41/41 verdes** (`Tests/`, xUnit). Build: `<Compile Remove>` p/ `Tests/**` E `Mcp/**` no csproj principal (glob da raiz).
 
 ## Decisions Log
 
