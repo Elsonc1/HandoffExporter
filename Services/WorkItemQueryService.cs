@@ -103,7 +103,7 @@ namespace HandoffExporter.Services
                     query = new { query = $@"SELECT [System.Id], [System.Title]  
                                 FROM WorkItems  
                                 WHERE  
-                                    [System.AreaPath] = 'Central de Soluções\{areaCondition}'  
+                                    [System.AreaPath] UNDER 'Central de Soluções\{areaCondition}'  
                                 AND [System.WorkItemType] IN ('Product Backlog Item', 'Product Backlog Item Desenvolvimento', 'Product Backlog Item Municipio', 'Product Backlog Item Habilitacao', 'Request Produto', 'Product Backlog Item Pesquisa', 'Product Backlog Item Compliance')  
                                 ORDER BY [System.ChangedDate] DESC" };
                 }
@@ -174,7 +174,7 @@ namespace HandoffExporter.Services
                 var query = new { query = $@"SELECT [System.Id], [System.Title]
                                 FROM WorkItems
                                 WHERE
-                                    [System.AreaPath] = 'Central de Soluções\{areaCondition}'
+                                    [System.AreaPath] UNDER 'Central de Soluções\{areaCondition}'
                                 ORDER BY [System.ChangedDate] DESC" };
 
                 _logHelper.Info($"WIQL all-artifacts for area '{areaCondition}': {query.query}");
@@ -209,7 +209,18 @@ namespace HandoffExporter.Services
                     var workItemsResponse = await _tfsService._httpClient.GetAsync(workItemsUrl);
                     if (workItemsResponse.StatusCode != HttpStatusCode.OK)
                     {
-                        _logHelper.Info($"Erro ao buscar all-artifacts batch {i / batchSize + 1}: {workItemsResponse.StatusCode}");
+                        // Um id problemático derrubaria o batch inteiro (perda silenciosa). Refaz por id.
+                        _logHelper.Warn("all-artifacts batch {0} falhou ({1}); tentando ids individualmente", i / batchSize + 1, workItemsResponse.StatusCode);
+                        foreach (var oneId in batchIds)
+                        {
+                            var oneJson = _tfsService.GetWorkItemAsync(oneId, "relations", null, _logHelper);
+                            if (oneJson != null && oneJson.StartsWith("{"))
+                            {
+                                try { var one = JsonConvert.DeserializeObject<WorkItem>(oneJson); if (one != null) workItems.Add(one); }
+                                catch (Exception exOne) { _logHelper.Warn("all-artifacts: id {0} falhou no parse individual: {1}", oneId, exOne.Message); }
+                            }
+                            else _logHelper.Warn("all-artifacts: id {0} sem detalhe individual", oneId);
+                        }
                         continue;
                     }
 
@@ -217,6 +228,15 @@ namespace HandoffExporter.Services
                     var workItemResult = JsonConvert.DeserializeObject<WorkItemResult>(workItemsResult);
                     if (workItemResult?.WorkItems != null)
                         workItems.AddRange(workItemResult.WorkItems);
+                }
+
+                // Visibilidade: avisa se algum id do WIQL não retornou detalhe (perda no fetch).
+                if (workItems.Count < ids.Length)
+                {
+                    var got = workItems.Select(w => w.Id).ToHashSet();
+                    var missing = ids.Where(id => !got.Contains(id)).ToList();
+                    _logHelper.Warn("all-artifacts: {0}/{1} ids sem detalhe apos fetch. Primeiros: {2}",
+                        missing.Count, ids.Length, string.Join(",", missing.Take(50)));
                 }
 
                 return workItems;
@@ -235,7 +255,7 @@ namespace HandoffExporter.Services
                 var query = new { query = $@"SELECT [System.Id], [System.Title]  
                                 FROM WorkItems  
                                 WHERE  
-                                    [System.AreaPath] = 'Central de Soluções\{areaCondition}'  
+                                    [System.AreaPath] UNDER 'Central de Soluções\{areaCondition}'  
                                 AND [System.WorkItemType] = 'Issue'  
                                 ORDER BY [System.ChangedDate] DESC" };
 

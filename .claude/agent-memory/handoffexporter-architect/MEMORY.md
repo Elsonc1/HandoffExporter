@@ -17,7 +17,8 @@ _(nenhuma ainda)_
 - [x] Fase 5 — Repos multi-PROJECT (NDD-DECollection/Integrações) — ✅ repos+branches + **join via PR** (`pull-requests.json`/`commits.json`/`links.json` + MCP `get_links` + `--reposTop`). ⏳ re-rodar `--includeRepos true` p/ gerar PRs/commits live (1ª run do usuário foi só repos+branches)
 - ✅ VALIDADO LIVE (usuário, 2026-06-03): 1694 work items MacGyver → 831 PBI/863 US/9 assets/982 raw; 14 repos da Integrações; MCP `ndd-handoff-mcp` instalado + `.mcp.json`
 - **Split por WorkItemType** ✅ (fix 2026-06-03): cada item na pasta do tipo real (pbi/us/st/spike/...; slug p/ desconhecidos). index v3.0 (counts-por-tipo + `items` lookup). MCP renomeado: `list_items`/`get_item`. ⏳ usuário precisa RE-RODAR o export (disco está no formato antigo).
-- **Testes: 55/55 verdes** (`Tests/`, xUnit). Build: `<Compile Remove>` p/ `Tests/**` E `Mcp/**` no csproj principal (glob da raiz).
+- **Fix "item sumindo" (206366, 2026-06-03):** all-artifacts montava a árvore só a partir de `roots = não-em-childIds`; um item em escopo cuja cadeia de pais não chega a um root (ciclo de TFS migrado / re-parent por 'Sub Módulo') era descartado. Agora usa `Services/WorkItemTree.TopLevel` = roots + **órfãos** (garante 100% dos itens em escopo). `BuildItemWithChildren` recebe `written`. Fetch por batch tem **fallback per-id** + **WARN de completude** (lista ids sem detalhe). UNDER (sub-áreas) também aplicado.
+- **Testes: 60/60 verdes** (`Tests/`, xUnit; `WorkItemTreeTests` cobre ciclo-sem-root/órfão). Build: `<Compile Remove>` p/ `Tests/**` E `Mcp/**` no csproj principal (glob da raiz).
 
 ## Decisions Log
 
@@ -26,5 +27,5 @@ _(nenhuma ainda)_
 ## Patterns / Quirks
 
 - TFS api-version 6.0; auth Basic com PAT (`":{pat}"` Base64).
-- Area path sempre `Central de Soluções\{area}`.
+- Area path sempre `Central de Soluções\{area}`. WIQL usa **`UNDER`** (não `=`) p/ incluir sub-áreas (ex.: `MacGyver\Team Works`) — fix 2026-06-03: issue 206366 sumia com `=`. (`WorkItemQueryService` linhas ~106/177/238)
 - Schema `HandoffJson` é contrato versionado (`Handoff.Version`).

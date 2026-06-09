@@ -196,32 +196,23 @@ namespace HandoffExporter
                     var allItems = await queryService.GetAllArtifactsAsync(areaPath);
                     logHelper.Info("all-artifacts: fetched {0} items total", allItems.Count);
 
-                    // Build set of child IDs referenced via Hierarchy-Forward relations
-                    var childIds = new HashSet<int>();
-                    foreach (var wi in allItems)
+                    // Mapa em memória (dedupe por id) p/ resolver filhos sem chamadas extras.
+                    var itemMap = allItems.GroupBy(wi => wi.Id).ToDictionary(g => g.Key, g => g.First());
+
+                    // Topo = roots (sem pai em escopo) + órfãos (não alcançáveis: ciclo / re-parent por
+                    // novos níveis como 'Sub Módulo'). Garante que NENHUM item em escopo seja descartado.
+                    var topLevel = WorkItemTree.TopLevel(allItems);
+                    logHelper.Info("all-artifacts: {0} itens topo (roots+orfaos) de {1}", topLevel.Count, allItems.Count);
+
+                    var written = new HashSet<int>();
+                    foreach (var top in topLevel)
                     {
-                        if (wi.Relations == null) continue;
-                        foreach (var rel in wi.Relations.Where(r => r.Rel == "System.LinkTypes.Hierarchy-Forward"))
-                        {
-                            var parts = rel.Url.Split('/');
-                            if (int.TryParse(parts.Last(), out int cid))
-                                childIds.Add(cid);
-                        }
-                    }
-
-                    // Build in-memory map for dedup and child resolution without extra API calls
-                    var itemMap = allItems.ToDictionary(wi => wi.Id);
-
-                    // Root items = not a child of any other item in the result set
-                    var roots = allItems.Where(wi => !childIds.Contains(wi.Id)).ToList();
-                    logHelper.Info("all-artifacts: {0} root items, {1} child references", roots.Count, childIds.Count);
-
-                    foreach (var root in roots)
-                    {
-                        // Each root gets its own visited set to avoid cycle guard affecting sibling trees
-                        var item = BuildItemWithChildren(root, itemMap, tfsService, logHelper, new HashSet<int>());
+                        var item = BuildItemWithChildren(top, itemMap, tfsService, logHelper, new HashSet<int>(), written);
                         handoffJson.Items.Add(item);
                     }
+                    int notWritten = allItems.Count(wi => !written.Contains(wi.Id));
+                    if (notWritten > 0)
+                        logHelper.Warn("all-artifacts: {0} item(s) em escopo NAO escritos (inesperado)", notWritten);
                 }
                 else
                 {
@@ -271,10 +262,11 @@ namespace HandoffExporter
             }
         }
 
-        static Item BuildItemWithChildren(WorkItem wi, Dictionary<int, WorkItem> itemMap, TFSAplicationProcess tfsService, ILogHelper logHelper, HashSet<int> visited)
+        static Item BuildItemWithChildren(WorkItem wi, Dictionary<int, WorkItem> itemMap, TFSAplicationProcess tfsService, ILogHelper logHelper, HashSet<int> visited, HashSet<int> written)
         {
             var item = CreateItem(wi, tfsService, logHelper);
             item.Children = new List<Item>();
+            written.Add(wi.Id);
 
             if (visited.Contains(wi.Id))
                 return item; // cycle guard
@@ -291,7 +283,7 @@ namespace HandoffExporter
                         logHelper.Info($"Child {childId} of {wi.Id} not in current fetch scope (may be outside area), skipping.");
                         continue;
                     }
-                    var childItem = BuildItemWithChildren(childWi, itemMap, tfsService, logHelper, visited);
+                    var childItem = BuildItemWithChildren(childWi, itemMap, tfsService, logHelper, visited, written);
                     item.Children.Add(childItem);
                 }
             }
