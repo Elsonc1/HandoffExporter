@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using static HandoffExporter.Models.WorkItemVO;
 
@@ -101,6 +102,7 @@ namespace HandoffExporter
             string splitDir = null, splitFrom = null, team = null, reposProject = null;
             bool includeRepos = false;
             int reposTop = 25;
+            int? inspectId = null;
 
             if (args.Length == 0)
             {
@@ -130,6 +132,7 @@ namespace HandoffExporter
                     else if (args[i] == "--includeRepos" && i + 1 < args.Length) includeRepos = bool.Parse(args[++i]);
                     else if (args[i] == "--reposProject" && i + 1 < args.Length) reposProject = args[++i];
                     else if (args[i] == "--reposTop" && i + 1 < args.Length) int.TryParse(args[++i], out reposTop);
+                    else if (args[i] == "--inspect" && i + 1 < args.Length && int.TryParse(args[i + 1], out var iid)) { inspectId = iid; i++; }
                 }
             }
 
@@ -138,6 +141,18 @@ namespace HandoffExporter
             {
                 if (string.IsNullOrEmpty(areaPath)) areaPath = team;
                 if (string.IsNullOrEmpty(splitDir)) splitDir = $"export/{team.ToLowerInvariant()}";
+            }
+
+            // Diagnóstico: inspeciona um work item DIRETO (sem filtro de área) — type/area/relations/campos.
+            if (inspectId.HasValue)
+            {
+                if (string.IsNullOrEmpty(collection) || string.IsNullOrEmpty(project))
+                {
+                    logHelper.Error("--inspect requer --collection e --project (ou rode sem args para usar o config)");
+                    return 1;
+                }
+                await InspectWorkItem(new TFSAplicationProcess(collection, project, config.Key), inspectId.Value, areaPath, logHelper);
+                return 0;
             }
 
             // Offline split: lê um HandoffJson existente e o quebra em sub-arquivos, sem chamar o TFS.
@@ -260,6 +275,59 @@ namespace HandoffExporter
                 logHelper.Error("Error: {0}", ex.Message);
                 return 1;
             }
+        }
+
+        // Diagnóstico de um único work item (sem filtro de área): mostra onde/se a API o retorna.
+        static async Task InspectWorkItem(TFSAplicationProcess tfs, int id, string area, ILogHelper log)
+        {
+            var http = tfs._httpClient;
+            var baseUrl = tfs._baseUrl;
+            log.Info("=== INSPECT {0} (base {1}) ===", id, baseUrl);
+
+            string body = "";
+            try
+            {
+                var resp = await http.GetAsync($"{baseUrl}/_apis/wit/workitems/{id}?$expand=relations&api-version=6.0");
+                body = await resp.Content.ReadAsStringAsync();
+                log.Info("GET workitems/{0}?$expand=relations -> HTTP {1} ({2} bytes)", id, (int)resp.StatusCode, body.Length);
+                if (!resp.IsSuccessStatusCode)
+                    log.Warn("corpo do erro (ate 800): {0}", body.Length > 800 ? body.Substring(0, 800) : body);
+            }
+            catch (Exception ex) { log.Error("GET workitems/{0} exception: {1}", id, ex.Message); }
+
+            if (body.StartsWith("{"))
+            {
+                try
+                {
+                    var wi = JsonConvert.DeserializeObject<WorkItem>(body);
+                    string F(string k) => wi?.Fields != null && wi.Fields.ContainsKey(k) ? wi.Fields[k]?.ToString() : "(ausente)";
+                    log.Info("type={0} | area={1} | iteration={2} | state={3} | relations={4}",
+                        F("System.WorkItemType"), F("System.AreaPath"), F("System.IterationPath"), F("System.State"), wi?.Relations?.Count ?? 0);
+                    if (wi?.Relations != null)
+                        foreach (var rel in wi.Relations) log.Info("  rel {0} -> {1}", rel.Rel, rel.Url);
+                    if (wi?.Fields != null) log.Info("  campos presentes: {0}", string.Join(" | ", wi.Fields.Keys));
+                    File.WriteAllText($"inspect-{id}.json", body);
+                    log.Info("raw salvo em inspect-{0}.json", id);
+                }
+                catch (Exception ex) { log.Error("parse falhou: {0}", ex.Message); }
+            }
+
+            if (!string.IsNullOrEmpty(area))
+            {
+                try
+                {
+                    var wiql = new { query = $@"SELECT [System.Id] FROM WorkItems WHERE [System.Id] = {id} AND [System.AreaPath] UNDER 'Central de Soluções\{area}'" };
+                    var content = new StringContent(JsonConvert.SerializeObject(wiql), System.Text.Encoding.UTF8, "application/json");
+                    var resp = await http.PostAsync($"{baseUrl}/_apis/wit/wiql?api-version=6.0", content);
+                    var wb = await resp.Content.ReadAsStringAsync();
+                    var wr = JsonConvert.DeserializeObject<WiqlResult>(wb);
+                    bool under = wr?.WorkItems?.Any(w => w.Id == id) ?? false;
+                    log.Info("WIQL [Id={0} AND AreaPath UNDER 'Central de Soluções\\{1}'] -> {2} (HTTP {3})",
+                        id, area, under ? "ESTA sob a area" : "NAO esta sob a area", (int)resp.StatusCode);
+                }
+                catch (Exception ex) { log.Error("WIQL membership exception: {0}", ex.Message); }
+            }
+            log.Info("=== FIM INSPECT {0} ===", id);
         }
 
         static Item BuildItemWithChildren(WorkItem wi, Dictionary<int, WorkItem> itemMap, TFSAplicationProcess tfsService, ILogHelper logHelper, HashSet<int> visited, HashSet<int> written)
