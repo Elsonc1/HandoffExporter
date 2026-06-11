@@ -46,6 +46,7 @@ namespace HandoffExporter
         public string SanitizedText { get; set; }
         public string State { get; set; }
         public string AcceptanceCriteria { get; set; }
+        public Dictionary<string, string> ContentFields { get; set; }
         public List<Asset> Assets { get; set; }
         public List<Attachment> Attachments { get; set; }
         public List<Item> Children { get; set; }
@@ -202,7 +203,8 @@ namespace HandoffExporter
             {
                 if (pbiId.HasValue)
                 {
-                    var wi = JsonConvert.DeserializeObject<WorkItem>(tfsService.GetWorkItemAsync(pbiId.Value, "relations", "System.Id,System.Title,System.Description,System.AreaPath,System.IterationPath,System.State,System.WorkItemType,System.Tags,System.ChangedDate,ndd.DefinicoesDeNegocio,ndd.DefinicoesTecnicas", logHelper));
+                    // Sem lista de fields: cada tipo (VO) tem campos de conteúdo próprios — busca todos.
+                    var wi = JsonConvert.DeserializeObject<WorkItem>(tfsService.GetWorkItemAsync(pbiId.Value, "relations", null, logHelper));
                     var item = await GetPBIWithChildren(tfsService, wi, logHelper);
                     handoffJson.Items.Add(item);
                 }
@@ -382,7 +384,8 @@ namespace HandoffExporter
                     // Extract ID from URL
                     var urlParts = rel.Url.Split('/');
                     int childId = int.Parse(urlParts.Last());
-                    var childJson = tfsService.GetWorkItemAsync(childId, null, "System.Id,System.Title,System.Description,Microsoft.VSTS.Common.AcceptanceCriteria,System.AreaPath,System.IterationPath,System.State,System.WorkItemType,System.Tags,System.ChangedDate,ndd.DefinicoesDeNegocio,ndd.DefinicoesTecnicas", logHelper);
+                    // Todos os campos + relations (VOs diferentes têm campos de conteúdo próprios; relations p/ anexos).
+                    var childJson = tfsService.GetWorkItemAsync(childId, "relations", null, logHelper);
                     if (childJson.StartsWith("{"))
                     {
                         var child = JsonConvert.DeserializeObject<WorkItem>(childJson);
@@ -405,98 +408,36 @@ namespace HandoffExporter
             return item;
         }
 
-        static (string rawHtml, string sanitizedText) ResolveContent(WorkItem wi, TFSAplicationProcess tfsService, ILogHelper logHelper)
-        {
-            string rawHtml = null;
-            string sanitizedText = null;
-
-            // For User Stories, prefer ndd.DefinicoesDeNegocio, fallback to System.Description
-            if (wi.Fields?.ContainsKey("System.WorkItemType") == true && wi.Fields["System.WorkItemType"].ToString() == "User Story")
-            {
-                if (wi.Fields.ContainsKey("ndd.DefinicoesDeNegocio") && !string.IsNullOrEmpty(wi.Fields["ndd.DefinicoesDeNegocio"].ToString()))
-                {
-                    rawHtml = wi.Fields["ndd.DefinicoesDeNegocio"].ToString();
-                    sanitizedText = tfsService.ExtractTextFromHtml(rawHtml);
-                }
-                else if (wi.Fields.ContainsKey("System.Description") && !string.IsNullOrEmpty(wi.Fields["System.Description"].ToString()))
-                {
-                    rawHtml = wi.Fields["System.Description"].ToString();
-                    sanitizedText = tfsService.ExtractTextFromHtml(rawHtml);
-                }
-                else
-                {
-                    // Fields not present, fetch individually
-                    var fieldsJson = tfsService.GetWorkItemAsync(wi.Id, null, "ndd.DefinicoesDeNegocio,System.Description", logHelper);
-                    if (fieldsJson.StartsWith("{"))
-                    {
-                        var fieldsWi = JsonConvert.DeserializeObject<WorkItem>(fieldsJson);
-                        if (fieldsWi?.Fields != null)
-                        {
-                            if (fieldsWi.Fields.ContainsKey("ndd.DefinicoesDeNegocio") && !string.IsNullOrEmpty(fieldsWi.Fields["ndd.DefinicoesDeNegocio"].ToString()))
-                            {
-                                rawHtml = fieldsWi.Fields["ndd.DefinicoesDeNegocio"].ToString();
-                                sanitizedText = tfsService.ExtractTextFromHtml(rawHtml);
-                            }
-                            else if (fieldsWi.Fields.ContainsKey("System.Description") && !string.IsNullOrEmpty(fieldsWi.Fields["System.Description"].ToString()))
-                            {
-                                rawHtml = fieldsWi.Fields["System.Description"].ToString();
-                                sanitizedText = tfsService.ExtractTextFromHtml(rawHtml);
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // For other work item types, use System.Description
-                if (wi.Fields?.ContainsKey("System.Description") == true && !string.IsNullOrEmpty(wi.Fields["System.Description"].ToString()))
-                {
-                    rawHtml = wi.Fields["System.Description"].ToString();
-                    sanitizedText = tfsService.ExtractTextFromHtml(rawHtml);
-                }
-                else
-                {
-                    // Fetch individually if needed
-                    var fieldsJson = tfsService.GetWorkItemAsync(wi.Id, null, "System.Description", logHelper);
-                    if (fieldsJson.StartsWith("{"))
-                    {
-                        var fieldsWi = JsonConvert.DeserializeObject<WorkItem>(fieldsJson);
-                        if (fieldsWi?.Fields?.ContainsKey("System.Description") == true && !string.IsNullOrEmpty(fieldsWi.Fields["System.Description"].ToString()))
-                        {
-                            rawHtml = fieldsWi.Fields["System.Description"].ToString();
-                            sanitizedText = tfsService.ExtractTextFromHtml(rawHtml);
-                        }
-                    }
-                }
-            }
-
-            return (rawHtml, sanitizedText);
-        }
-
-        static string ResolveAcceptanceCriteria(WorkItem wi, TFSAplicationProcess tfsService)
-        {
-            string GetField(string key) =>
-                wi.Fields?.ContainsKey(key) == true && !string.IsNullOrEmpty(wi.Fields[key]?.ToString())
-                    ? wi.Fields[key].ToString() : null;
-
-            // US guarda critérios em ndd.DefinicoesTecnicas; fallback para o campo padrão.
-            var raw = GetField("ndd.DefinicoesTecnicas") ?? GetField("Microsoft.VSTS.Common.AcceptanceCriteria");
-            return raw != null ? tfsService.ExtractTextFromHtml(raw) : null;
-        }
-
         static Item CreateItem(WorkItem wi, TFSAplicationProcess tfsService, ILogHelper logHelper)
         {
-            var (rawHtml, sanitizedText) = ResolveContent(wi, tfsService, logHelper);
+            // VO-agnóstico: coleta todos os campos de conteúdo (ndd./NDD./nddd. + exatos) e
+            // compõe a descrição quando a primária (DefinicoesDeNegocio/System.Description) está vazia.
+            var resolved = ContentResolver.Resolve(wi, tfsService.ExtractTextFromHtml);
+
+            // Item veio de um fetch restrito (sem os campos do seu VO)? Hidrata o item completo uma vez.
+            // Marcador: System.CreatedDate sempre vem quando o fetch trouxe todos os campos.
+            if (resolved.ContentFields.Count == 0 &&
+                (wi.Fields == null || !wi.Fields.ContainsKey("System.CreatedDate")))
+            {
+                var fullJson = tfsService.GetWorkItemAsync(wi.Id, null, null, logHelper);
+                if (fullJson != null && fullJson.StartsWith("{"))
+                {
+                    var full = JsonConvert.DeserializeObject<WorkItem>(fullJson);
+                    if (full?.Fields != null)
+                        resolved = ContentResolver.Resolve(full, tfsService.ExtractTextFromHtml);
+                }
+            }
 
             var item = new Item
             {
                 Id = wi.Id,
                 WorkItemType = wi.Fields?.ContainsKey("System.WorkItemType") == true ? wi.Fields["System.WorkItemType"].ToString() : null,
                 Title = wi.Fields?.ContainsKey("System.Title") == true ? wi.Fields["System.Title"].ToString() : null,
-                RawHtml = rawHtml,
-                SanitizedText = sanitizedText,
+                RawHtml = resolved.RawHtml,
+                SanitizedText = resolved.SanitizedText,
                 State = wi.Fields?.ContainsKey("System.State") == true ? wi.Fields["System.State"]?.ToString() : null,
-                AcceptanceCriteria = ResolveAcceptanceCriteria(wi, tfsService),
+                AcceptanceCriteria = resolved.AcceptanceCriteria,
+                ContentFields = resolved.ContentFields,
                 Assets = new List<Asset>(),
                 Attachments = new List<Attachment>(),
                 Children = new List<Item>()

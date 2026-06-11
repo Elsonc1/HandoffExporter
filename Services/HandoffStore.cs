@@ -65,6 +65,9 @@ namespace HandoffExporter.Services
                     (string?)o["title"], (string?)o["description"], (string?)o["acceptanceCriteria"]
                 }.Where(s => !string.IsNullOrEmpty(s)));
 
+                if (o["contentFields"] is JObject cf)
+                    hay += "\n" + string.Join("\n", cf.Properties().Select(p => (string?)p.Value).Where(s => !string.IsNullOrEmpty(s)));
+
                 if (hay.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
                     hits.Add(new SearchHit
                     {

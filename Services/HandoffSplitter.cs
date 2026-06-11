@@ -88,6 +88,8 @@ namespace HandoffExporter.Services
                     state = item.State,
                     description = item.SanitizedText,
                     acceptanceCriteria = item.AcceptanceCriteria,
+                    // Mapa completo dos campos de conteúdo do VO (varia por tipo) — nada se perde.
+                    contentFields = (item.ContentFields != null && item.ContentFields.Count > 0) ? item.ContentFields : null,
                     parentId,
                     parentPath,
                     childIds = childRefs.Select(c => c.id).ToList(),

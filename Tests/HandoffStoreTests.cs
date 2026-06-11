@@ -24,6 +24,7 @@ namespace HandoffExporter.Tests
                     new() {
                         Id = 100, WorkItemType = "Product Backlog Item", Title = "Integração ConfigVO",
                         SanitizedText = "PBI sobre configuração", State = "In Development",
+                        ContentFields = new Dictionary<string, string> { ["ndd.PropostaFuncional"] = "texto da proposta funcional xpto" },
                         Assets = new(), Attachments = new(),
                         Children = new List<Item>
                         {
@@ -105,6 +106,10 @@ namespace HandoffExporter.Tests
             var hit = _store.Search("ConfigVO").First(h => h.Id == 100);
             Assert.Equal("Product Backlog Item", hit.Type);
         }
+
+        [Fact]
+        public void Search_FindsText_InsideContentFields()
+            => Assert.Contains(_store.Search("proposta funcional xpto"), h => h.Id == 100);
 
         [Fact] public void Search_CaseInsensitive() => Assert.NotEmpty(_store.Search("configvo"));
         [Fact] public void Search_NoMatch_Empty() => Assert.Empty(_store.Search("zzz-nao-existe"));

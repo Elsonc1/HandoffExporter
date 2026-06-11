@@ -288,6 +288,21 @@ namespace HandoffExporter.Tests
         }
 
         [Fact]
+        public void Split_ContentFields_Emitted_WhenPresent()
+        {
+            var pbi = Pbi(1);
+            pbi.ContentFields = new Dictionary<string, string> { ["ndd.PropostaFuncional"] = "proposta completa" };
+            HandoffSplitter.Split(Handoff(pbi), _dir);
+            var j = ReadJson("pbi", "PBI-1.json");
+            Assert.Equal("proposta completa", (string)j["contentFields"]!["ndd.PropostaFuncional"]!);
+
+            // ausente → null (não objeto vazio)
+            HandoffSplitter.Split(Handoff(Pbi(2)), Path.Combine(_dir, "b"));
+            var j2 = JObject.Parse(File.ReadAllText(Path.Combine(_dir, "b", "pbi", "PBI-2.json")));
+            Assert.Null((object?)((Newtonsoft.Json.Linq.JValue?)j2["contentFields"])?.Value);
+        }
+
+        [Fact]
         public void Split_NullChildrenAndAssets_DoesNotThrow()
         {
             var item = new Item { Id = 1, WorkItemType = "Product Backlog Item", Title = "x", SanitizedText = "y", Assets = null!, Attachments = null!, Children = null! };
