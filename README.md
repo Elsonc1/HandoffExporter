@@ -167,7 +167,7 @@ export/macgyver/
 ```
 
 Cada arquivo de item carrega: `id, workItemType, title, state, description, acceptanceCriteria,
-parentId, parentPath, childIds, children[{id,workItemType,path}], attachments, assets, rawPath`.
+contentFields, parentId, parentPath, childIds, children[{id,workItemType,path}], attachments, assets, rawPath`.
 
 **Garantias:** determinístico (ordenado por id; mesmos bytes para o mesmo input), **sem segredos** no output, data-URIs base64 extraídos para `assets/`, e **todo item em escopo é exportado** (roots + órfãos — itens não alcançáveis por ciclo/re-parent não somem).
 
@@ -215,6 +215,7 @@ Guia completo: `docs/mcp/INSTALL.md`.
 ## Regras de mapeamento e sanitização
 
 - **User Story** → `description` de `ndd.DefinicoesDeNegocio` (fallback `System.Description`); `acceptanceCriteria` de `ndd.DefinicoesTecnicas` (fallback `Microsoft.VSTS.Common.AcceptanceCriteria`).
+- **VO-agnóstico** (`ContentResolver`): cada tipo tem campos próprios (ex.: PBI Compliance usa `ndd.PropostaFuncional`/`NDD.Objetivo`/`NDD.BeneficiosCliente`, sem `System.Description`). O exporter coleta **todos** os campos de conteúdo (`ndd.*`/`NDD.*`/`nddd.*` + exatos conhecidos) em `contentFields` e, quando a descrição primária está vazia, **compõe** a `description` a partir deles (blocos `### campo`). A busca (`search`) também varre `contentFields`.
 - `state` de `System.State`; hierarquia via `System.LinkTypes.Hierarchy-Forward`; anexos via `AttachedFile`.
 - HTML → texto via HtmlAgilityPack; `RawHtml` original preservado em `raw/`.
 - Campo ausente → `null` (não string vazia). PAT/segredos **nunca** são serializados.

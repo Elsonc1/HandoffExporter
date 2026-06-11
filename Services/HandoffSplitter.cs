@@ -27,6 +27,9 @@ namespace HandoffExporter.Services
 
             logHelper?.Info("Split iniciado -> {0}", outDir);
 
+            // Limpa o snapshot anterior (arquivos stale de runs antigas enganam o leitor).
+            PrepareOutputDirectory(outDir, logHelper);
+
             string assetsDir = Path.Combine(outDir, "assets");
             string rawDir = Path.Combine(outDir, "raw");
             Directory.CreateDirectory(outDir);
@@ -149,6 +152,32 @@ namespace HandoffExporter.Services
             int rawCount = Directory.GetFiles(rawDir).Length;
             logHelper?.Info("Split concluido: {0} item(s) em {1} pasta(s) por tipo, {2} asset(s), {3} raw -> {4}",
                 flat.Count, countsByFolder.Count, assetCount, rawCount, outDir);
+        }
+
+        /// <summary>
+        /// Apaga o snapshot anterior (pastas por tipo, assets/, raw/, index.json), preservando
+        /// repos/ (gerida pelo RepoWriter). Guarda de segurança: um diretório não-vazio SEM
+        /// index.json não é um snapshot nosso — aborta em vez de apagar dados alheios.
+        /// </summary>
+        private static void PrepareOutputDirectory(string outDir, ILogHelper logHelper)
+        {
+            if (!Directory.Exists(outDir)) return;
+            var entries = Directory.GetFileSystemEntries(outDir);
+            if (entries.Length == 0) return;
+
+            if (!File.Exists(Path.Combine(outDir, "index.json")))
+                throw new IOException(
+                    $"Diretório de split '{outDir}' não está vazio e não contém um snapshot (index.json). " +
+                    "Aponte --split para um diretório novo ou para um snapshot existente.");
+
+            foreach (var entry in entries)
+            {
+                var name = Path.GetFileName(entry);
+                if (string.Equals(name, "repos", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Directory.Exists(entry)) Directory.Delete(entry, true);
+                else File.Delete(entry);
+            }
+            logHelper?.Info("Snapshot anterior limpo em {0} (repos/ preservada)", outDir);
         }
 
         private static List<ChildRef> ChildRefs(Item item, Dictionary<int, (string folder, string prefix, string path, string type)> pathById)

@@ -374,3 +374,6 @@ logs.json
 # Saída do split e scratch
 export/
 tmp/
+
+# Dumps de diagnóstico (--inspect) — contêm dados internos do TFS
+inspect-*.json

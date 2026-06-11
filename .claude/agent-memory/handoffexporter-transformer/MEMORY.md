@@ -19,8 +19,12 @@ _(nenhuma ainda)_
 
 | Campo | Origem | Status |
 |-------|--------|--------|
-| US Description | `ndd.DefinicoesDeNegocio` → fallback `System.Description` | ok (código atual) |
-| US AcceptanceCriteria | `ndd.DefinicoesTecnicas` → fallback `Microsoft.VSTS.Common.AcceptanceCriteria` | **conferir** (dev-guide pede, código atual foca em Description) |
+| US Description | `ndd.DefinicoesDeNegocio` → fallback `System.Description` | ok |
+| US AcceptanceCriteria | `ndd.DefinicoesTecnicas` → fallback `Microsoft.VSTS.Common.AcceptanceCriteria` | ok (Fase 2a) |
+| **VOs por tipo** | `Services/ContentResolver.cs` coleta TODOS os campos `ndd.*`/`NDD.*`/`nddd.*` (+ exatos VSTS) em `contentFields`; compõe description quando primária vazia | ok (2026-06-09) |
+| PBI Compliance | SEM `System.Description`! Conteúdo em `ndd.PropostaFuncional` (~16k chars), `NDD.Objetivo`, `NDD.BeneficiosCliente`, `NDD.Discovery*`/`Sorting*` | descoberto via `--inspect 204055` |
+| Issue (Suporte) | `System.Description` + `ndd.ModeloDescricao`/`1` + `Microsoft.VSTS.Common.ProductName/ModuleName/...` | visto no inspect 206366 |
+| Prefixo `NDDigital.*` | (SLAPause, Priority) — metadado, NÃO é conteúdo | excluído do resolver |
 
 ## Quirks
 
