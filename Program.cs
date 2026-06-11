@@ -306,6 +306,16 @@ namespace HandoffExporter
                     if (wi?.Relations != null)
                         foreach (var rel in wi.Relations) log.Info("  rel {0} -> {1}", rel.Rel, rel.Url);
                     if (wi?.Fields != null) log.Info("  campos presentes: {0}", string.Join(" | ", wi.Fields.Keys));
+                    if (wi?.Fields != null)
+                        foreach (var kv in wi.Fields)
+                        {
+                            var k = kv.Key;
+                            bool cand = k.Contains("Descri", StringComparison.OrdinalIgnoreCase) || k.Contains("Defini", StringComparison.OrdinalIgnoreCase)
+                                || k.Contains("Modelo", StringComparison.OrdinalIgnoreCase) || k.Contains("Negocio", StringComparison.OrdinalIgnoreCase)
+                                || k.Contains("Criteri", StringComparison.OrdinalIgnoreCase) || k.Contains("Tecnica", StringComparison.OrdinalIgnoreCase);
+                            if (cand)
+                                log.Info("  >> campo-conteudo '{0}': {1} chars", k, (kv.Value?.ToString() ?? "").Length);
+                        }
                     File.WriteAllText($"inspect-{id}.json", body);
                     log.Info("raw salvo em inspect-{0}.json", id);
                 }
