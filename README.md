@@ -119,15 +119,18 @@ dotnet run --project HandoffExporter.csproj -- [opções]
 | `--includeRepos <bool>` | Inclui repos (branches + PRs + commits) do `--reposProject` |
 | `--reposProject <nome>` | Project dos repositórios (default `Integrações`) |
 | `--reposTop <N>` | Qtde de PRs/commits por repo (default 25) |
+| `--downloadAttachments <bool>` | **Baixa os anexos** de cada artefato para `attachments/<id>/` (nomes reais) |
+| `--maxAttachmentMB <N>` | Limite por anexo no download (default 25 MB; acima → skip logado) |
 | `--inspect <id>` | **Diagnóstico**: busca um work item direto e mostra type/area/relations/campos |
 
 ### Exemplos
 
 ```powershell
-# Export completo do MacGyver: work items + split por tipo + repos/PRs/commits
+# Export completo do MacGyver: work items + split por tipo + repos/PRs/commits + anexos
 dotnet run --project HandoffExporter.csproj -- --team macgyver `
   --collection NDD-DECollection --project "Central de Soluções" `
-  --mode all-artifacts --output output.json --includeRepos true --reposProject "Integrações"
+  --mode all-artifacts --output output.json --includeRepos true --reposProject "Integrações" `
+  --downloadAttachments true
 
 # Um PBI específico
 dotnet run --project HandoffExporter.csproj -- --collection NDD-DECollection `
@@ -156,7 +159,8 @@ export/macgyver/
   spike/SPIKE-<id>.json
   issue/ISSUE-<id>.json
   <slug-do-tipo>/<SLUG>-<id>.json   # tipos não mapeados (ex.: request-produto/REQUEST-PRODUTO-<id>.json)
-  assets/<id>-asset-<n>.<ext># imagens base64 extraídas dos data-URIs
+  assets/<id>-asset-<n>.<ext># imagens base64 extraídas dos data-URIs (embutidas na descrição)
+  attachments/<id>/<arquivo> # anexos do artefato BAIXADOS (com --downloadAttachments true)
   raw/<id>.html              # RawHtml original (fora do JSON do agente)
   repos/
     index.json               # catálogo de repos

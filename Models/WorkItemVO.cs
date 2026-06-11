@@ -50,6 +50,18 @@ namespace HandoffExporter.Models
 
             [JsonProperty("url")]
             public string Url { get; set; }
+
+            [JsonProperty("attributes")]
+            public RelationAttributes Attributes { get; set; }
+        }
+
+        public class RelationAttributes
+        {
+            [JsonProperty("name")]
+            public string Name { get; set; }
+
+            [JsonProperty("resourceSize")]
+            public long? ResourceSize { get; set; }
         }
 
         public class WorkItemField

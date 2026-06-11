@@ -403,6 +403,42 @@ Resultado: enriquecer cada US/PBI com `relatedPullRequests[]`/`relatedRepos[]`, 
 - (d) Tests + QA.
 
 ### 12.8 Questões a confirmar (antes de implementar a Fase 5)
+
+---
+
+## 13. Anexos por artefato — download para contexto da IA (decidido 2026-06-11)
+
+> Pedido do usuário: cada artefato (PBI, Issue, Sprint Task, ...) pode ter anexos
+> (.txt, .xml, .json, .png, .jpg, ...). Para a IA ter o contexto completo, os anexos
+> devem ser **baixados**, organizados em **uma pasta por artefato**.
+
+### 13.1 Layout
+```
+export/macgyver/
+  attachments/
+    204055/                       # uma pasta por artefato (id)
+      NT-2025.002-spec.pdf        # nome REAL (attributes.name da relação AttachedFile)
+      layout-exemplo.xml
+    206366/
+      log-erro.txt
+```
+
+### 13.2 Decisões
+- **Nomes reais**: `WorkItemRelation.attributes.name` (+ `resourceSize`) — fim do `"attachment"` genérico.
+- **Paths planejados ANTES do split** (`AttachmentPlanner`, puro/determinístico): sanitização de nome,
+  dedupe (`arquivo.txt`, `arquivo-2.txt`), `attachments/<id>/<nome>`. Os JSONs dos itens saem com
+  `localPath` já correto.
+- **Download DEPOIS do split** (`AttachmentDownloader`): GET na URL da relação com o mesmo
+  HttpClient/PAT; grava nos paths planejados. Falhou (404/timeout) → **WARN + mantém a `url`**
+  no JSON (degradação graciosa, sem abortar o export).
+- **Limite de tamanho**: `--maxAttachmentMB <N>` (default **25 MB**); acima disso → skip logado
+  (sem cap silencioso).
+- **Opt-in**: `--downloadAttachments true` (default false — download de centenas de anexos custa
+  tempo/disco; o comando recomendado do MacGyver inclui a flag).
+- **Clean**: `attachments/` faz parte do snapshot — é apagada e regerada a cada run (diferente de
+  `repos/`, que tem ciclo próprio).
+- **MCP/agentes**: nenhum tool novo — o JSON do item aponta `attachments[].localPath` relativo à
+  raiz do snapshot; o agente lê com `Read` (txt/xml/json/imagem).
 1. ✅ **RESOLVIDO:** "Integrações" é um **Project** na collection `NDD-DECollection` (multi-project, single collection).
 2. O PAT atual tem scope de **Code (read)** na Integrações (além de Work Items + Build)?
 3. Quais repos pertencem ao MacGyver — todos da Integrações ou um subconjunto (por nome/convenção)?

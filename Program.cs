@@ -68,6 +68,7 @@ namespace HandoffExporter
         public string FileName { get; set; }
         public string ContentType { get; set; }
         public long Size { get; set; }
+        public string LocalPath { get; set; }
     }
 
     public class Handoff
@@ -104,6 +105,8 @@ namespace HandoffExporter
             bool includeRepos = false;
             int reposTop = 25;
             int? inspectId = null;
+            bool downloadAttachments = false;
+            int maxAttachmentMB = 25;
 
             if (args.Length == 0)
             {
@@ -134,6 +137,8 @@ namespace HandoffExporter
                     else if (args[i] == "--reposProject" && i + 1 < args.Length) reposProject = args[++i];
                     else if (args[i] == "--reposTop" && i + 1 < args.Length) int.TryParse(args[++i], out reposTop);
                     else if (args[i] == "--inspect" && i + 1 < args.Length && int.TryParse(args[i + 1], out var iid)) { inspectId = iid; i++; }
+                    else if (args[i] == "--downloadAttachments" && i + 1 < args.Length) downloadAttachments = bool.Parse(args[++i]);
+                    else if (args[i] == "--maxAttachmentMB" && i + 1 < args.Length) int.TryParse(args[++i], out maxAttachmentMB);
                 }
             }
 
@@ -267,7 +272,27 @@ namespace HandoffExporter
 
                 if (!string.IsNullOrEmpty(splitDir))
                 {
+                    // Anexos (opt-in): planeja paths → baixa p/ staging (falha zera LocalPath) →
+                    // split escreve JSONs fiéis → staging vira export/<...>/attachments.
+                    string attachmentsStaging = null;
+                    if (downloadAttachments)
+                    {
+                        AttachmentPlanner.AssignLocalPaths(handoffJson.Items);
+                        attachmentsStaging = splitDir.TrimEnd('/', '\\') + ".attachments-staging";
+                        if (Directory.Exists(attachmentsStaging)) Directory.Delete(attachmentsStaging, true);
+                        var downloader = new AttachmentDownloader(tfsService._httpClient, logHelper, (long)maxAttachmentMB * 1024 * 1024);
+                        await downloader.DownloadAllAsync(handoffJson.Items, attachmentsStaging);
+                    }
+
                     HandoffSplitter.Split(handoffJson, splitDir, logHelper);
+
+                    if (attachmentsStaging != null)
+                    {
+                        var stagingAtt = Path.Combine(attachmentsStaging, "attachments");
+                        if (Directory.Exists(stagingAtt))
+                            Directory.Move(stagingAtt, Path.Combine(splitDir, "attachments"));
+                        if (Directory.Exists(attachmentsStaging)) Directory.Delete(attachmentsStaging, true);
+                    }
 
                     // Fase 5 — repos do MacGyver vivem em outro Project (mesma Collection): NDD-DECollection/Integrações.
                     if (includeRepos)
@@ -477,7 +502,14 @@ namespace HandoffExporter
                 {
                     if (rel.Rel == "AttachedFile")
                     {
-                        item.Attachments.Add(new Attachment { Url = rel.Url, FileName = "attachment", ContentType = "file" });
+                        // Nome/tamanho reais vêm dos attributes da relação (quando o fetch usou $expand=relations).
+                        item.Attachments.Add(new Attachment
+                        {
+                            Url = rel.Url,
+                            FileName = !string.IsNullOrWhiteSpace(rel.Attributes?.Name) ? rel.Attributes.Name : "attachment",
+                            ContentType = "file",
+                            Size = rel.Attributes?.ResourceSize ?? 0
+                        });
                     }
                 }
             }

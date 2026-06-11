@@ -75,7 +75,7 @@ namespace HandoffExporter.Services
                 var assets = ExtractAssets(item, assetsDir, logHelper);
                 var attachments = (item.Attachments ?? new List<Attachment>())
                     .Where(a => a != null)
-                    .Select(a => new { url = a.Url, fileName = a.FileName, contentType = a.ContentType, size = a.Size })
+                    .Select(a => new { url = a.Url, fileName = a.FileName, contentType = a.ContentType, size = a.Size, localPath = a.LocalPath })
                     .ToList();
 
                 var childRefs = ChildRefs(item, pathById);
