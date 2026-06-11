@@ -180,7 +180,7 @@ namespace HandoffExporter.Services
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
-                    _logHelper.Info($"Não foi possível acessar ou comunicar com o TFS (all-artifacts): {response.StatusCode}");
+                    _logHelper.Error($"WIQL all-artifacts falhou: HTTP {response.StatusCode} em {url}. NotFound geralmente = collection/project errados (confira acentos: 'Central de Soluções').");
                     return new List<WorkItem>();
                 }
 

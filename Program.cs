@@ -213,6 +213,14 @@ namespace HandoffExporter
                     var allItems = await queryService.GetAllArtifactsAsync(areaPath);
                     logHelper.Info("all-artifacts: fetched {0} items total", allItems.Count);
 
+                    // Fail-fast: 0 itens = quase sempre parâmetro errado (ex.: --project sem acentos
+                    // → WIQL 404). Aborta SEM rodar o split, preservando o snapshot anterior.
+                    if (allItems.Count == 0)
+                    {
+                        logHelper.Error("Export abortado: WIQL retornou 0 itens para a area '{0}'. Verifique --collection/--project (acentos! ex.: \"Central de Soluções\") e o PAT. O split NAO foi executado para preservar o snapshot anterior.", areaPath);
+                        return 1;
+                    }
+
                     // Mapa em memória (dedupe por id) p/ resolver filhos sem chamadas extras.
                     var itemMap = allItems.GroupBy(wi => wi.Id).ToDictionary(g => g.Key, g => g.First());
 

@@ -278,6 +278,40 @@ namespace HandoffExporter.Tests
             Assert.Equal("In Development", (string)idxRoot["state"]!);
         }
 
+        // ── Clean de snapshot anterior (stale) ─────────────────────────────────────────
+        [Fact]
+        public void Split_CleansStaleFiles_FromPreviousSnapshot()
+        {
+            // snapshot antigo: PBI-999 que não existe mais no novo export
+            HandoffSplitter.Split(Handoff(Pbi(999), Pbi(1)), _dir);
+            Assert.True(File.Exists(Path.Combine(_dir, "pbi", "PBI-999.json")));
+
+            HandoffSplitter.Split(Handoff(Pbi(1)), _dir); // novo export sem o 999
+            Assert.False(File.Exists(Path.Combine(_dir, "pbi", "PBI-999.json"))); // stale removido
+            Assert.True(File.Exists(Path.Combine(_dir, "pbi", "PBI-1.json")));
+        }
+
+        [Fact]
+        public void Split_PreservesReposFolder_OnClean()
+        {
+            HandoffSplitter.Split(Handoff(Pbi(1)), _dir);
+            Directory.CreateDirectory(Path.Combine(_dir, "repos"));
+            File.WriteAllText(Path.Combine(_dir, "repos", "index.json"), "{}");
+
+            HandoffSplitter.Split(Handoff(Pbi(2)), _dir);
+            Assert.True(File.Exists(Path.Combine(_dir, "repos", "index.json"))); // repos/ intacta
+            Assert.False(File.Exists(Path.Combine(_dir, "pbi", "PBI-1.json")));  // itens limpos
+        }
+
+        [Fact]
+        public void Split_NonSnapshotDirWithFiles_Throws()
+        {
+            Directory.CreateDirectory(_dir);
+            File.WriteAllText(Path.Combine(_dir, "dados-importantes.txt"), "não apague!");
+            Assert.Throws<IOException>(() => HandoffSplitter.Split(Handoff(Pbi(1)), _dir));
+            Assert.True(File.Exists(Path.Combine(_dir, "dados-importantes.txt"))); // nada foi apagado
+        }
+
         // ── Robustez ────────────────────────────────────────────────────────────────────
         [Fact]
         public void Split_TitleWithBraces_DoesNotThrow()

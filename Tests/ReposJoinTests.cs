@@ -85,6 +85,28 @@ namespace HandoffExporter.Tests
             Assert.Empty(JArray.Parse(store.GetLinksForWorkItem(999)));
         }
 
+        // ── Clean de snapshot anterior de repos ────────────────────────────────────
+        [Fact]
+        public void Write_CleansStaleRepoFolders()
+        {
+            RepoWriter.Write(new[] { new RepoInfo { Id = "g", Name = "Old", Branches = new() { "main" } } }, _dir);
+            Assert.True(Directory.Exists(Path.Combine(_dir, "repos", "Old")));
+
+            RepoWriter.Write(new[] { new RepoInfo { Id = "g", Name = "New", Branches = new() { "main" } } }, _dir);
+            Assert.False(Directory.Exists(Path.Combine(_dir, "repos", "Old"))); // stale removido
+            Assert.True(Directory.Exists(Path.Combine(_dir, "repos", "New")));
+        }
+
+        [Fact]
+        public void Write_NonSnapshotReposDir_Throws()
+        {
+            Directory.CreateDirectory(Path.Combine(_dir, "repos"));
+            File.WriteAllText(Path.Combine(_dir, "repos", "alheio.txt"), "x");
+            Assert.Throws<IOException>(() =>
+                RepoWriter.Write(new[] { new RepoInfo { Id = "g", Name = "R" } }, _dir));
+            Assert.True(File.Exists(Path.Combine(_dir, "repos", "alheio.txt")));
+        }
+
         // ── Parsing dos DTOs ───────────────────────────────────────────────────────
         [Fact]
         public void Parse_GitPrResult()

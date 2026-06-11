@@ -23,6 +23,15 @@ namespace HandoffExporter.Services
             if (repos == null) return;
 
             string reposDir = Path.Combine(outDir, "repos");
+
+            // Limpa o snapshot anterior de repos (stale). Guarda: só apaga se for snapshot nosso.
+            if (Directory.Exists(reposDir) && Directory.GetFileSystemEntries(reposDir).Length > 0)
+            {
+                if (!File.Exists(Path.Combine(reposDir, "index.json")))
+                    throw new IOException(
+                        $"'{reposDir}' não está vazio e não contém um snapshot de repos (index.json). Abortando para não apagar dados alheios.");
+                Directory.Delete(reposDir, true);
+            }
             Directory.CreateDirectory(reposDir);
 
             var indexEntries = new List<object>();
